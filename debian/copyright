@@ -1,0 +1,7 @@
+Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: mtp
+Source: http://launchpad.net/mtp
+
+Files: *
+Copyright: 2010 The Android Open Source Project
+License: ASL-2
