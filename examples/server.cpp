@@ -1,4 +1,4 @@
-#include "StubMtpDatabase.h"
+#include "MtpImageDatabase.h"
 
 #include <MtpServer.h>
 #include <MtpStorage.h>
@@ -42,7 +42,7 @@ int main(int argc, char** argv)
     {
         new android::MtpServer(
             fd, 
-            new android::StubMtpDatabase(),
+            new android::MtpImageDatabase(),
             false, 
             FileSystemConfig::file_group, 
             FileSystemConfig::file_perm, 

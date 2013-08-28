@@ -10,6 +10,8 @@ set(MTP_VERSION_MAJOR 1)
 set(MTP_VERSION_MINOR 0)
 set(MTP_VERSION_PATCH 0)
 
+find_package(Qt5Core REQUIRED)
+
 set(
     MTP_HEADERS
     include/MtpDatabase.h
@@ -53,6 +55,7 @@ set(
 include_directories(
     include/
     libusbhost/include
+    ${Qt5Core_INCLUDE_DIRS}
 )
 
 add_library(

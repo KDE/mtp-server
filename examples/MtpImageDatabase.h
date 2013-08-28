@@ -7,73 +7,82 @@
 #include <MtpObjectInfo.h>
 #include <MtpProperty.h>
 
+#include <cstdlib>
 #include <cstring>
 #include <iostream>
 #include <map>
 #include <string>
 #include <tuple>
 
+#include <QMap>
+#include <QVector>
+#include <QDir>
+#include <QString>
+
 namespace android
 {
-class StubMtpDatabase : public android::MtpDatabase {
+class MtpImageDatabase : public android::MtpDatabase {
 private:
     struct DbEntry
     {
         MtpStorageID storage_id;
-        std::string object_name;
+        std::string *object_name;
         MtpObjectFormat object_format;
         size_t object_size;
         size_t width;
         size_t height;
         size_t bit_depth;
-        std::string display_name;
-        std::string path;
+        std::string *display_name;
+        std::string *path;
     };
 
-    enum PngImageHandles
-    {
-        png_image_1,
-        png_image_2,
-        png_image_3,
-        png_image_4,
-        png_image_5,
-        png_image_6,                        
-        png_image_7,
-        png_image_8,
-        png_image_9,
-        png_image_10,
-        png_image_size                        
-    };
-    static const uint32_t reserved_slots = png_image_size;
-    
     uint32_t counter;
-    std::map<std::tuple<MtpStorageID, MtpObjectFormat>, MtpObjectHandleList> db = 
+    QMap<MtpObjectHandle, DbEntry*> db;
+    
+    void readFiles(const QString& path)
     {
-        {
-            std::make_tuple(MTP_STORAGE_REMOVABLE_RAM, MTP_FORMAT_PNG), 
-            {png_image_1, png_image_2, png_image_3, png_image_4, png_image_5, png_image_6, png_image_7, png_image_8, png_image_9, png_image_10}
+        QDir dir(path);
+	struct DbEntry *entry;
+
+        dir.setFilter(QDir::Files | QDir::Hidden | QDir::NoSymLinks);
+
+        std::cout << __PRETTY_FUNCTION__ << ": " << path.toStdString() << std::endl;
+
+        QFileInfoList list = dir.entryInfoList();
+        std::cout << "     Bytes Filename" << std::endl;
+        for (int i = 0; i < list.size(); ++i, counter++) {
+            QFileInfo fileInfo = list.at(i);
+
+            std::cout << qPrintable(QString("%1 %2").arg(fileInfo.size(), 10)
+                                                    .arg(fileInfo.fileName()));
+            std::cout << std::endl;
+
+            entry = (DbEntry*) malloc(sizeof(*entry));
+            memset (entry, 0, sizeof(*entry));
+            entry->storage_id = MTP_STORAGE_REMOVABLE_RAM;
+            entry->object_name = new std::string(fileInfo.fileName().toStdString());
+            entry->display_name = new std::string(fileInfo.fileName().toStdString());
+            entry->path = new std::string(fileInfo.canonicalFilePath().toStdString());
+            entry->object_format = MTP_FORMAT_PNG;
+            entry->object_size = fileInfo.size();
+            entry->width = 0;
+            entry->height = 0;
+            entry->bit_depth = 0;
+
+            db.insert(counter, entry);
         }
-    };
-    
-    std::map<MtpObjectHandle, DbEntry> entries = 
-    {
-        {png_image_1, {MTP_STORAGE_REMOVABLE_RAM, "png_image_1", MTP_FORMAT_PNG, 20 * 20 * 4, 20, 20, 4, "png_image_1", "png_image_1.png"}},
-        {png_image_2, {MTP_STORAGE_REMOVABLE_RAM, "png_image_2", MTP_FORMAT_PNG, 20 * 20 * 4, 20, 20, 4, "png_image_2", "png_image_2.png"}},
-        {png_image_3, {MTP_STORAGE_REMOVABLE_RAM, "png_image_3", MTP_FORMAT_PNG, 20 * 20 * 4, 20, 20, 4, "png_image_3", "png_image_3.png"}},
-        {png_image_4, {MTP_STORAGE_REMOVABLE_RAM, "png_image_4", MTP_FORMAT_PNG, 20 * 20 * 4, 20, 20, 4, "png_image_4", "png_image_4.png"}},                
-        {png_image_5, {MTP_STORAGE_REMOVABLE_RAM, "png_image_5", MTP_FORMAT_PNG, 20 * 20 * 4, 20, 20, 4, "png_image_5", "png_image_5.png"}},
-        {png_image_6, {MTP_STORAGE_REMOVABLE_RAM, "png_image_6", MTP_FORMAT_PNG, 20 * 20 * 4, 20, 20, 4, "png_image_6", "png_image_6.png"}},
-        {png_image_7, {MTP_STORAGE_REMOVABLE_RAM, "png_image_7", MTP_FORMAT_PNG, 20 * 20 * 4, 20, 20, 4, "png_image_7", "png_image_7.png"}},
-        {png_image_8, {MTP_STORAGE_REMOVABLE_RAM, "png_image_8", MTP_FORMAT_PNG, 20 * 20 * 4, 20, 20, 4, "png_image_8", "png_image_8.png"}},
-        {png_image_9, {MTP_STORAGE_REMOVABLE_RAM, "png_image_9", MTP_FORMAT_PNG, 20 * 20 * 4, 20, 20, 4, "png_image_9", "png_image_9.png"}},
-        {png_image_10, {MTP_STORAGE_REMOVABLE_RAM, "png_image_10", MTP_FORMAT_PNG, 20 * 20 * 4, 20, 20, 4, "png_image_10", "png_image_10.png"}}
-    };
-    
-public:
-    StubMtpDatabase() : counter(StubMtpDatabase::reserved_slots)
-    {
     }
-    virtual ~StubMtpDatabase() {}
+
+public:
+    MtpImageDatabase() : counter(1)
+    {
+	db = QMap<MtpObjectHandle, DbEntry*>();
+	readFiles(QString("/home/mtrudel/Images"));
+	
+        std::cout << __PRETTY_FUNCTION__ << ": object count:" << db.count() << std::endl;
+    }
+
+    virtual ~MtpImageDatabase() {}
 
     // called from SendObjectInfo to reserve a database entry for the incoming file
     virtual MtpObjectHandle beginSendObject(
@@ -109,7 +118,7 @@ public:
         MtpObjectHandleList* list = nullptr;
         try
         {
-            list = new MtpObjectHandleList(db.at(std::make_tuple(storageID, MTP_FORMAT_PNG)));
+            list = new MtpObjectHandleList(db.keys().toVector().toStdVector());
         } catch(...)
         {
             list = new MtpObjectHandleList();
@@ -126,7 +135,7 @@ public:
         std::cout << __PRETTY_FUNCTION__ << ": " << storageID << ", " << format << ", " << parent << std::endl;
         try
         {
-            return db.at(std::make_tuple(storageID, MTP_FORMAT_PNG)).size();
+            return db.size();
         } catch(...)
         {
         }
@@ -185,13 +194,13 @@ public:
         std::cout << __PRETTY_FUNCTION__ << std::endl;
         switch(property)
         {
-            case MTP_PROPERTY_STORAGE_ID: packet.putUInt32(entries.at(handle).storage_id); break;            
-            case MTP_PROPERTY_OBJECT_FORMAT: packet.putUInt32(entries.at(handle).object_format); break;
-            case MTP_PROPERTY_OBJECT_SIZE: packet.putUInt32(entries.at(handle).object_size); break;
-            case MTP_PROPERTY_WIDTH: packet.putUInt32(entries.at(handle).width); break;
-            case MTP_PROPERTY_HEIGHT: packet.putUInt32(entries.at(handle).height); break;
-            case MTP_PROPERTY_IMAGE_BIT_DEPTH: packet.putUInt32(entries.at(handle).bit_depth); break;
-            case MTP_PROPERTY_DISPLAY_NAME: packet.putString(entries.at(handle).display_name.c_str()); break;
+            case MTP_PROPERTY_STORAGE_ID: packet.putUInt32(db.value(handle)->storage_id); break;            
+            case MTP_PROPERTY_OBJECT_FORMAT: packet.putUInt32(db.value(handle)->object_format); break;
+            case MTP_PROPERTY_OBJECT_SIZE: packet.putUInt32(db.value(handle)->object_size); break;
+            case MTP_PROPERTY_WIDTH: packet.putUInt32(db.value(handle)->width); break;
+            case MTP_PROPERTY_HEIGHT: packet.putUInt32(db.value(handle)->height); break;
+            case MTP_PROPERTY_IMAGE_BIT_DEPTH: packet.putUInt32(db.value(handle)->bit_depth); break;
+            case MTP_PROPERTY_DISPLAY_NAME: packet.putString(db.value(handle)->display_name->c_str()); break;
             default: return MTP_RESPONSE_GENERAL_ERROR; break;                
         }
         
@@ -248,11 +257,11 @@ public:
     {
         std::cout << __PRETTY_FUNCTION__ << std::endl;
         info.mHandle = handle;
-        info.mStorageID = entries.at(handle).storage_id;
-        info.mFormat = entries.at(handle).object_format;
+        info.mStorageID = db.value(handle)->storage_id;
+        info.mFormat = db.value(handle)->object_format;
         info.mProtectionStatus = 0x0;
         info.mCompressedSize = 0;
-        info.mThumbFormat = entries.at(handle).object_format;
+        info.mThumbFormat = db.value(handle)->object_format;
         info.mThumbCompressedSize = 20*20*4;
         info.mThumbPixWidth = 20;
         info.mThumbPixHeight  =20;
@@ -263,7 +272,7 @@ public:
         info.mAssociationType = 0;
         info.mAssociationDesc = 0;
         info.mSequenceNumber = 0;
-        info.mName = ::strdup("test");
+        info.mName = ::strdup(db.value(handle)->object_name->c_str());
         info.mDateCreated = 0;
         info.mDateModified = 0;
         info.mKeywords = ::strdup("ubuntu,touch");
@@ -287,9 +296,9 @@ public:
         MtpObjectFormat& outFormat)
     {
         std::cout << __PRETTY_FUNCTION__ << std::endl;
-        outFilePath = entries.at(handle).path;
+        outFilePath = *(db.value(handle)->path);
         outFileLength = 1024;
-        outFormat = entries.at(handle).object_format;
+        outFormat = db.value(handle)->object_format;
     }
 
     virtual MtpResponseCode deleteFile(MtpObjectHandle handle)
