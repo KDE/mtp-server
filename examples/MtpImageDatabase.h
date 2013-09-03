@@ -18,6 +18,10 @@
 #include <QVector>
 #include <QDir>
 #include <QString>
+#include <QPixmap>
+#include <QSize>
+#include <QByteArray>
+#include <QBuffer>
 
 namespace android
 {
@@ -125,7 +129,7 @@ public:
     {
         std::cout << __PRETTY_FUNCTION__ << ": " << path << std::endl;
 
-	if (!suceeded) {
+	if (!succeeded) {
 		db.remove(handle);
 	}
     }
@@ -303,10 +307,27 @@ public:
 
     virtual void* getThumbnail(MtpObjectHandle handle, size_t& outThumbSize)
     {
+        QPixmap pixmap;
+        QSize size (64, 64);
+        QByteArray raw;
+        QBuffer buffer(&raw);
+        QString path = QString(db.value(handle)->path.c_str());
+        void* result;
+
         std::cout << __PRETTY_FUNCTION__ << std::endl;
-        outThumbSize = 20*20*4;
-        void* result = malloc(20*20*4);
-        memset(result, 0, 20*20*4);
+
+        pixmap = QPixmap(path, NULL, NULL);
+
+        // scale pixmap to thumb size
+        pixmap = pixmap.scaled(size, Qt::KeepAspectRatio);
+
+        buffer.open(QIODevice::WriteOnly);
+        pixmap.save(&buffer, "PNG"); // writes pixmap into bytes in PNG format
+
+        outThumbSize = raw.size();
+        result = malloc(outThumbSize);
+        memcpy(result, raw.constData(), outThumbSize);
+
         return result;
     }
 

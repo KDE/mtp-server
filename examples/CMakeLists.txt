@@ -12,6 +12,7 @@ target_link_libraries(
     mtp
     usbhost
     ${Qt5Core_LIBRARIES}
+    ${Qt5Gui_LIBRARIES}
 )
 
 install(
