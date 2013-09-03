@@ -316,10 +316,15 @@ public:
         int64_t& outFileLength,
         MtpObjectFormat& outFormat)
     {
+        DbEntry *entry = db.value(handle);
+
         std::cout << __PRETTY_FUNCTION__ << std::endl;
-        outFilePath = *(db.value(handle)->path);
-        outFileLength = 1024;
-        outFormat = db.value(handle)->object_format;
+
+        outFilePath = std::string(entry->path->c_str());
+        outFileLength = entry->object_size;
+        outFormat = entry->object_format;
+
+        return MTP_RESPONSE_OK;
     }
 
     virtual MtpResponseCode deleteFile(MtpObjectHandle handle)
