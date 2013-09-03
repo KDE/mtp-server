@@ -22,8 +22,8 @@ struct FileSystemConfig
 
 android::MtpStorage* removable_storage = new android::MtpStorage(
     MTP_STORAGE_REMOVABLE_RAM, 
-    ".",
-    "Dummy storage", 
+    "/home/phablet/Pictures",
+    "Image storage", 
     1024 * 1024 * 1024 * 200,
     true,
     1024 * 1024 * 1024);

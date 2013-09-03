@@ -77,7 +77,7 @@ public:
     MtpImageDatabase() : counter(1)
     {
 	db = QMap<MtpObjectHandle, DbEntry*>();
-	readFiles(QString("/home/mtrudel/Images"));
+	readFiles(QString("/home/phablet/Pictures"));
 	
         std::cout << __PRETTY_FUNCTION__ << ": object count:" << db.count() << std::endl;
     }
@@ -93,8 +93,25 @@ public:
         uint64_t size,
         time_t modified)
     {
+	DbEntry *entry;
+	MtpObjectHandle handle = counter;
+
         std::cout << __PRETTY_FUNCTION__ << ": " << path << std::endl;
-        return counter++; 
+
+        entry = (DbEntry*) malloc(sizeof(*entry));
+        memset (entry, 0, sizeof(*entry));
+        entry->storage_id = storage;
+        entry->object_name = new std::string(basename(path.c_str()));
+        entry->display_name = new std::string(basename(path.c_str()));
+        entry->path = new std::string(path);
+        entry->object_format = format;
+        entry->object_size = size;
+
+        db.insert(handle, entry);
+
+	counter++;
+
+        return handle; 
     }
 
     // called to report success or failure of the SendObject file transfer
@@ -107,6 +124,10 @@ public:
         bool succeeded)
     {
         std::cout << __PRETTY_FUNCTION__ << ": " << path << std::endl;
+
+	if (!suceeded) {
+		db.remove(handle);
+	}
     }
 
     virtual MtpObjectHandleList* getObjectList(
