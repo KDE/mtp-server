@@ -1,0 +1,9 @@
+description "MTP protocol server"
+
+start on local-filesystems
+stop on runlevel [016]
+
+expect fork
+respawn
+
+exec /usr/bin/mtp-server &

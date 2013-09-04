@@ -311,7 +311,7 @@ public:
         QSize size (64, 64);
         QByteArray raw;
         QBuffer buffer(&raw);
-        QString path = QString(db.value(handle)->path.c_str());
+        QString path = QString(db.value(handle)->path->c_str());
         void* result;
 
         std::cout << __PRETTY_FUNCTION__ << std::endl;
