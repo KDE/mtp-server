@@ -1,6 +1,7 @@
 Source: mtp
 Priority: extra
-Maintainer: Thomas Voß <thomas.voss@canonical.com>
+Maintainer: Ubuntu Developers <ubuntu-devel-discuss@lists.ubuntu.com>
+XSBC-Original-Maintainer: Thomas Voß <thomas.voss@canonical.com>
 Build-Depends: debhelper (>= 8.0.0), 
 	       cmake, 
 Standards-Version: 3.9.4
@@ -24,12 +25,12 @@ Description: A server-implementation of MTP.
  .
  Contains header files required to develop actual services.
 
-Package: mtp-examples
+Package: mtp-server
 Architecture: any
 Depends: ${misc:Depends},
          ${shlibs:Depends}
 Description: A server-implementation of MTP.
  Exposes phone storage over MTP. 	  
  .
- Contains example executables
+ Contains a simple MTP server that exposes images, videos, and music.
 

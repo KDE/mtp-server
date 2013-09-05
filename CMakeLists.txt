@@ -86,4 +86,4 @@ install(
 )
 
 add_subdirectory(libusbhost)
-add_subdirectory(examples)
+add_subdirectory(server)

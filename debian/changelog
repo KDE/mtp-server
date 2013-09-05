@@ -1,5 +1,5 @@
-mtp (0.0.2-1) raring; urgency=low
+mtp (0.0.3-0ubuntu1) UNRELEASED; urgency=low
 
-  * Initial release
+  * Initial pre-release
 
- -- Thomas Voß <thomas.voss@canonical.com>  Mon, 10 June 2013 11:43:05 +0200
+ -- Mathieu Trudel-Lapierre <mathieu-tl@ubuntu.com>  Thu, 05 Sep 2013 11:12:01 -0400
