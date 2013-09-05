@@ -1,9 +1,11 @@
 Source: mtp
-Priority: extra
+Priority: optional
 Maintainer: Ubuntu Developers <ubuntu-devel-discuss@lists.ubuntu.com>
 XSBC-Original-Maintainer: Thomas Voß <thomas.voss@canonical.com>
 Build-Depends: debhelper (>= 8.0.0), 
-	       cmake, 
+               cmake, 
+               qtbase5-dev,
+               libqt5gui5,
 Standards-Version: 3.9.4
 Homepage: http://launchpad.net/mtp
 
