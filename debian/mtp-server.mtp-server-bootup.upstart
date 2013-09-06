@@ -1,6 +1,6 @@
 description "MTP protocol server bootup"
 
-start on local-filesystems
+start on android
 
 task
 
