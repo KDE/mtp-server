@@ -10,8 +10,7 @@ set(MTP_VERSION_MAJOR 1)
 set(MTP_VERSION_MINOR 0)
 set(MTP_VERSION_PATCH 0)
 
-find_package(Qt5Core REQUIRED)
-find_package(Qt5Gui REQUIRED)
+find_package(Boost REQUIRED COMPONENTS system filesystem)
 
 set(
     MTP_HEADERS
@@ -56,8 +55,7 @@ set(
 include_directories(
     include/
     libusbhost/include
-    ${Qt5Core_INCLUDE_DIRS}
-    ${Qt5Gui_INCLUDE_DIRS}
+    ${Boost_INCLUDE_DIRS}
 )
 
 add_library(

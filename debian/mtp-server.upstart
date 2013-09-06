@@ -1,26 +1,15 @@
 description "MTP protocol server"
 
-start on local-filesystems
-stop on runlevel [016]
+start on android_usb-device-changed
 
 expect fork
 respawn
 
 pre-start script
-	timeout=10
-	# loop 10 times and then exit, if the property service
-	# isnt up after 80 sec # it is likely not starting at all
-	while [ ! -e /dev/socket/property_service ]; do
-		sleep 8
-		if [ "$timeout" -le 0 ]; then
-			stop
-			exit 0
-		fi
-		timeout=$(($timeout - 1))
-	done
-
-	if [ -x /usr/bin/setprop ]; then
-		/usr/bin/setprop sys.usb.config mtp,adb
+	state=`cat /sys/class/android_usb/android0/state`
+	if [ "$state" = "DISCONNECTED" ]; then
+		stop
+		exit 0
 	fi
 
 	rm -f /var/log/upstart/mtp-server.log

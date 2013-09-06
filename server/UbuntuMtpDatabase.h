@@ -11,82 +11,102 @@
 #include <cstring>
 #include <iostream>
 #include <map>
+#include <vector>
 #include <string>
 #include <tuple>
 
-#include <QMap>
-#include <QVector>
-#include <QDir>
-#include <QString>
-#include <QPixmap>
-#include <QSize>
-#include <QByteArray>
-#include <QBuffer>
+#include <boost/foreach.hpp>
+#include <boost/filesystem.hpp>
+#include <boost/range/adaptors.hpp>
+#include <boost/range/algorithm.hpp>
+
+using namespace boost::filesystem;
 
 namespace android
 {
-class MtpImageDatabase : public android::MtpDatabase {
+class UbuntuMtpDatabase : public android::MtpDatabase {
 private:
     struct DbEntry
     {
         MtpStorageID storage_id;
-        std::string *object_name;
+        std::string object_name;
         MtpObjectFormat object_format;
+        MtpObjectHandle parent;
         size_t object_size;
-        size_t width;
-        size_t height;
-        size_t bit_depth;
-        std::string *display_name;
-        std::string *path;
+        std::string display_name;
+        std::string path;
     };
 
     uint32_t counter;
-    QMap<MtpObjectHandle, DbEntry*> db;
+    std::map<MtpObjectHandle, DbEntry> db;
     
-    void readFiles(const QString& path)
+    void parse_directory(path p, MtpObjectHandle parent)
     {
-        QDir dir(path);
-	struct DbEntry *entry;
+	DbEntry entry;
+        std::vector<path> v;
 
-        dir.setFilter(QDir::Files | QDir::Hidden | QDir::NoSymLinks);
+        copy(directory_iterator(p), directory_iterator(), std::back_inserter(v));
 
-        std::cout << __PRETTY_FUNCTION__ << ": " << path.toStdString() << std::endl;
+        for (std::vector<path>::const_iterator it(v.begin()), it_end(v.end()); it != it_end; ++it)
+        {
+            MtpObjectHandle handle = counter;
 
-        QFileInfoList list = dir.entryInfoList();
-        std::cout << "     Bytes Filename" << std::endl;
-        for (int i = 0; i < list.size(); ++i, counter++) {
-            QFileInfo fileInfo = list.at(i);
+            counter++;
 
-            std::cout << qPrintable(QString("%1 %2").arg(fileInfo.size(), 10)
-                                                    .arg(fileInfo.fileName()));
-            std::cout << std::endl;
+            std::cout << "   " << *it << " handle: " << handle << " parent: " << parent << std::endl;
 
-            entry = (DbEntry*) malloc(sizeof(*entry));
-            memset (entry, 0, sizeof(*entry));
-            entry->storage_id = MTP_STORAGE_REMOVABLE_RAM;
-            entry->object_name = new std::string(fileInfo.fileName().toStdString());
-            entry->display_name = new std::string(fileInfo.fileName().toStdString());
-            entry->path = new std::string(fileInfo.canonicalFilePath().toStdString());
-            entry->object_format = MTP_FORMAT_PNG;
-            entry->object_size = fileInfo.size();
-            entry->width = 0;
-            entry->height = 0;
-            entry->bit_depth = 0;
+            entry.storage_id = MTP_STORAGE_FIXED_RAM;
+            entry.parent = parent;
+            entry.object_name = it->filename().string();
+            entry.display_name = it->filename().string();
+            entry.path = it->string();
 
-            db.insert(counter, entry);
+            if (is_regular_file (*it)) {
+                entry.object_format = MTP_FORMAT_DEFINED;
+                entry.object_size = file_size(*it);
+
+                db.insert( std::pair<MtpObjectHandle, DbEntry>(handle, entry) );
+            } else if (is_directory (*it)) {
+                entry.object_format = MTP_FORMAT_ASSOCIATION;
+                entry.object_size = 0;
+
+                db.insert( std::pair<MtpObjectHandle, DbEntry>(handle, entry) );
+
+                parse_directory (*it, handle);
+	    }
         }
     }
 
-public:
-    MtpImageDatabase() : counter(1)
+    void readFiles(const std::string& sourcedir)
     {
-	db = QMap<MtpObjectHandle, DbEntry*>();
-	readFiles(QString("/home/phablet/Pictures"));
-	
-        std::cout << __PRETTY_FUNCTION__ << ": object count:" << db.count() << std::endl;
+        path p (sourcedir);
+
+        try {
+            if (exists(p)) {
+                if (is_directory(p)) {
+                    std::cout << p << " is a directory containing:\n";
+
+                    parse_directory (p, MTP_PARENT_ROOT);
+                }
+            } else
+                std::cout << p << " does not exist\n";
+        }
+        catch (const filesystem_error& ex) {
+            std::cout << ex.what() << '\n';
+        }
+
     }
 
-    virtual ~MtpImageDatabase() {}
+public:
+    UbuntuMtpDatabase() : counter(1)
+    {
+	db = std::map<MtpObjectHandle, DbEntry>();
+	readFiles("/home/phablet");
+	
+        std::cout << __PRETTY_FUNCTION__ << ": object count:" << db.size() << std::endl;
+    }
+
+    virtual ~UbuntuMtpDatabase() {}
 
     // called from SendObjectInfo to reserve a database entry for the incoming file
     virtual MtpObjectHandle beginSendObject(
@@ -97,21 +117,20 @@ public:
         uint64_t size,
         time_t modified)
     {
-	DbEntry *entry;
+	DbEntry entry;
 	MtpObjectHandle handle = counter;
 
         std::cout << __PRETTY_FUNCTION__ << ": " << path << std::endl;
 
-        entry = (DbEntry*) malloc(sizeof(*entry));
-        memset (entry, 0, sizeof(*entry));
-        entry->storage_id = storage;
-        entry->object_name = new std::string(basename(path.c_str()));
-        entry->display_name = new std::string(basename(path.c_str()));
-        entry->path = new std::string(path);
-        entry->object_format = format;
-        entry->object_size = size;
+        entry.storage_id = storage;
+        entry.parent = parent;
+        entry.object_name = std::string(basename(path.c_str()));
+        entry.display_name = std::string(basename(path.c_str()));
+        entry.path = path;
+        entry.object_format = format;
+        entry.object_size = size;
 
-        db.insert(handle, entry);
+        db.insert( std::pair<MtpObjectHandle, DbEntry>(handle, entry) );
 
 	counter++;
 
@@ -130,7 +149,7 @@ public:
         std::cout << __PRETTY_FUNCTION__ << ": " << path << std::endl;
 
 	if (!succeeded) {
-		db.remove(handle);
+		db.erase(handle);
 	}
     }
 
@@ -143,7 +162,14 @@ public:
         MtpObjectHandleList* list = nullptr;
         try
         {
-            list = new MtpObjectHandleList(db.keys().toVector().toStdVector());
+            std::vector<MtpObjectHandle> keys;
+
+            BOOST_FOREACH(MtpObjectHandle i, db | boost::adaptors::map_keys) {
+                if (db.at(i).parent == parent)
+                    keys.push_back(i);
+            }
+
+            list = new MtpObjectHandleList(keys);
         } catch(...)
         {
             list = new MtpObjectHandleList();
@@ -187,12 +213,15 @@ public:
     virtual MtpObjectPropertyList* getSupportedObjectProperties(MtpObjectFormat format)
     {
         std::cout << __PRETTY_FUNCTION__ << std::endl;
+	/*
         if (format != MTP_FORMAT_PNG)
             return nullptr;
+        */
             
         static const MtpObjectPropertyList list = 
         {
             MTP_PROPERTY_STORAGE_ID,
+            MTP_PROPERTY_PARENT_OBJECT,
             MTP_PROPERTY_OBJECT_FORMAT,
             MTP_PROPERTY_OBJECT_SIZE,
             MTP_PROPERTY_WIDTH,
@@ -219,13 +248,11 @@ public:
         std::cout << __PRETTY_FUNCTION__ << std::endl;
         switch(property)
         {
-            case MTP_PROPERTY_STORAGE_ID: packet.putUInt32(db.value(handle)->storage_id); break;            
-            case MTP_PROPERTY_OBJECT_FORMAT: packet.putUInt32(db.value(handle)->object_format); break;
-            case MTP_PROPERTY_OBJECT_SIZE: packet.putUInt32(db.value(handle)->object_size); break;
-            case MTP_PROPERTY_WIDTH: packet.putUInt32(db.value(handle)->width); break;
-            case MTP_PROPERTY_HEIGHT: packet.putUInt32(db.value(handle)->height); break;
-            case MTP_PROPERTY_IMAGE_BIT_DEPTH: packet.putUInt32(db.value(handle)->bit_depth); break;
-            case MTP_PROPERTY_DISPLAY_NAME: packet.putString(db.value(handle)->display_name->c_str()); break;
+            case MTP_PROPERTY_STORAGE_ID: packet.putUInt32(db.at(handle).storage_id); break;            
+            case MTP_PROPERTY_PARENT_OBJECT: packet.putUInt32(db.at(handle).parent); break;            
+            case MTP_PROPERTY_OBJECT_FORMAT: packet.putUInt32(db.at(handle).object_format); break;
+            case MTP_PROPERTY_OBJECT_SIZE: packet.putUInt32(db.at(handle).object_size); break;
+            case MTP_PROPERTY_DISPLAY_NAME: packet.putString(db.at(handle).display_name.c_str()); break;
             default: return MTP_RESPONSE_GENERAL_ERROR; break;                
         }
         
@@ -282,22 +309,22 @@ public:
     {
         std::cout << __PRETTY_FUNCTION__ << std::endl;
         info.mHandle = handle;
-        info.mStorageID = db.value(handle)->storage_id;
-        info.mFormat = db.value(handle)->object_format;
+        info.mStorageID = db.at(handle).storage_id;
+        info.mFormat = db.at(handle).object_format;
         info.mProtectionStatus = 0x0;
         info.mCompressedSize = 0;
-        info.mThumbFormat = db.value(handle)->object_format;
+        info.mThumbFormat = db.at(handle).object_format;
         info.mThumbCompressedSize = 20*20*4;
         info.mThumbPixWidth = 20;
         info.mThumbPixHeight  =20;
         info.mImagePixWidth = 20;
         info.mImagePixHeight = 20;
         info.mImagePixDepth = 4;
-        info.mParent = MTP_PARENT_ROOT;
+        info.mParent = db.at(handle).parent;
         info.mAssociationType = 0;
         info.mAssociationDesc = 0;
         info.mSequenceNumber = 0;
-        info.mName = ::strdup(db.value(handle)->object_name->c_str());
+        info.mName = ::strdup(db.at(handle).object_name.c_str());
         info.mDateCreated = 0;
         info.mDateModified = 0;
         info.mKeywords = ::strdup("ubuntu,touch");
@@ -307,26 +334,10 @@ public:
 
     virtual void* getThumbnail(MtpObjectHandle handle, size_t& outThumbSize)
     {
-        QPixmap pixmap;
-        QSize size (64, 64);
-        QByteArray raw;
-        QBuffer buffer(&raw);
-        QString path = QString(db.value(handle)->path->c_str());
         void* result;
 
-        std::cout << __PRETTY_FUNCTION__ << std::endl;
-
-        pixmap = QPixmap(path, NULL, NULL);
-
-        // scale pixmap to thumb size
-        pixmap = pixmap.scaled(size, Qt::KeepAspectRatio);
-
-        buffer.open(QIODevice::WriteOnly);
-        pixmap.save(&buffer, "PNG"); // writes pixmap into bytes in PNG format
-
-        outThumbSize = raw.size();
-        result = malloc(outThumbSize);
-        memcpy(result, raw.constData(), outThumbSize);
+	outThumbSize = 0;
+	memset(result, 0, outThumbSize);
 
         return result;
     }
@@ -337,13 +348,13 @@ public:
         int64_t& outFileLength,
         MtpObjectFormat& outFormat)
     {
-        DbEntry *entry = db.value(handle);
+        DbEntry entry = db.at(handle);
 
         std::cout << __PRETTY_FUNCTION__ << std::endl;
 
-        outFilePath = std::string(entry->path->c_str());
-        outFileLength = entry->object_size;
-        outFormat = entry->object_format;
+        outFilePath = std::string(entry.path);
+        outFileLength = entry.object_size;
+        outFormat = entry.object_format;
 
         return MTP_RESPONSE_OK;
     }

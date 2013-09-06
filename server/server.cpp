@@ -1,4 +1,4 @@
-#include "MtpImageDatabase.h"
+#include "UbuntuMtpDatabase.h"
 
 #include <MtpServer.h>
 #include <MtpStorage.h>
@@ -15,18 +15,18 @@ namespace
 {
 struct FileSystemConfig
 {
-    static const int file_group = 1023; // Taken from android's config. Might need to be adjusted.
+    static const int file_group = 32011; // phablet user.
     static const int file_perm = 0664;
     static const int directory_perm = 0755;
 };
 
-android::MtpStorage* removable_storage = new android::MtpStorage(
-    MTP_STORAGE_REMOVABLE_RAM, 
-    "/home/phablet/Pictures",
-    "Image storage", 
-    1024 * 1024 * 1024 * 200,
-    true,
-    1024 * 1024 * 1024);
+android::MtpStorage* home_storage = new android::MtpStorage(
+    MTP_STORAGE_FIXED_RAM, 
+    "/home/phablet",
+    "Local storage", 
+    1024 * 1024 * 100,  /* 100 MB reserved space, to avoid filling the disk */
+    false,
+    1024 * 1024 * 1024 * 2  /* 2GB arbitrary max file size */);
 }
 
 int main(int argc, char** argv)
@@ -42,13 +42,13 @@ int main(int argc, char** argv)
     {
         new android::MtpServer(
             fd, 
-            new android::MtpImageDatabase(),
+            new android::UbuntuMtpDatabase(),
             false, 
             FileSystemConfig::file_group, 
             FileSystemConfig::file_perm, 
             FileSystemConfig::directory_perm)
     };
-    server->addStorage(removable_storage);
+    server->addStorage(home_storage);
     server->run();
 
     /*

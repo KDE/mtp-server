@@ -11,8 +11,9 @@ target_link_libraries(
     mtp-server
     mtp
     usbhost
-    ${Qt5Core_LIBRARIES}
-    ${Qt5Gui_LIBRARIES}
+    ${Boost_LIBRARIES}
+    ${Boost_system_LIBRARIES}
+    ${Boost_filesystem_LIBRARIES}
 )
 
 install(

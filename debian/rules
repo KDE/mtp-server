@@ -6,3 +6,6 @@
 %:
 	dh $@
 
+override_dh_installinit:
+	dh_installinit -pmtp-server --name=mtp-server-bootup
+	dh_installinit

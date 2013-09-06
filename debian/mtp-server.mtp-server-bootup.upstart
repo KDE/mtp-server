@@ -1,0 +1,25 @@
+description "MTP protocol server bootup"
+
+start on local-filesystems
+
+task
+
+script
+        timeout=10
+        # loop 10 times and then exit, if the property service
+        # isnt up after 80 sec # it is likely not starting at all
+        while [ ! -e /dev/socket/property_service ]; do
+                sleep 8
+                if [ "$timeout" -le 0 ]; then
+                        stop
+                        exit 0
+                fi
+                timeout=$(($timeout - 1))
+        done
+
+        if [ -x /usr/bin/setprop ]; then
+                /usr/bin/setprop sys.usb.config mtp,adb
+        fi
+
+        start mtp-server
+end script
