@@ -361,9 +361,48 @@ public:
 
     virtual MtpResponseCode deleteFile(MtpObjectHandle handle)
     {
+        size_t orig_size = db.size();
+        size_t new_size;
+
         std::cout << __PRETTY_FUNCTION__ << std::endl;
-        return MTP_RESPONSE_OPERATION_NOT_SUPPORTED;
+
+        new_size = db.erase(handle);
+
+        if (orig_size > new_size) {
+            /* Recursively remove children object from the DB as well.
+             * we can safely ignore failures here, since the objects
+             * would not be reachable anyway.
+             */
+            BOOST_FOREACH(MtpObjectHandle i, db | boost::adaptors::map_keys) {
+                if (db.at(i).parent == handle)
+                    db.erase(i);
+            }
+            return MTP_RESPONSE_OK;
+        }
+        else
+            return MTP_RESPONSE_GENERAL_ERROR;
     }
+
+    /*
+    virtual MtpResponseCode moveFile(MtpObjectHandle handle, MtpObjectHandle new_parent)
+    {
+        std::cout << __PRETTY_FUNCTION__ << std::endl;
+
+        // change parent
+
+        return MTP_RESPONSE_OK
+    }
+
+    virtual MtpResponseCode copyFile(MtpObjectHandle handle, MtpObjectHandle new_parent)
+    {
+        std::cout << __PRETTY_FUNCTION__ << std::endl;
+
+        // duplicate DbEntry
+        // change parent
+
+        return MTP_RESPONSE_OK
+    }
+    */
 
     virtual MtpObjectHandleList* getObjectReferences(MtpObjectHandle handle)
     {
