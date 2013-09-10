@@ -4,6 +4,8 @@ start on android
 
 task
 
+emits android_usb-device-changed        
+
 script
         timeout=10
         # loop 10 times and then exit, if the property service
@@ -21,5 +23,5 @@ script
                 /usr/bin/setprop sys.usb.config mtp,adb
         fi
 
-        start mtp-server
+        emit android_usb-device-changed        
 end script
