@@ -49,6 +49,7 @@ bool parseDateTime(const char* dateTime, time_t& outSeconds) {
 
     // hack to compute timezone
     time_t dummy;
+    tzset();
     localtime_r(&dummy, &tm);
 
     tm.tm_sec = second;
