@@ -3,27 +3,31 @@ Section: utils
 Priority: optional
 Maintainer: Ubuntu Developers <ubuntu-devel-discuss@lists.ubuntu.com>
 XSBC-Original-Maintainer: Thomas Voß <thomas.voss@canonical.com>
-Build-Depends: debhelper (>= 8.0.0), 
+Build-Depends: debhelper (>= 9), 
                cmake, 
                libboost-dev,
                libboost-filesystem-dev,
                libboost-test-dev,
 Standards-Version: 3.9.4
 Homepage: http://launchpad.net/mtp
+# If you aren't ~phablet-team but need to upload packaging changes,
+# just go ahead.  ~phablet-team will notice and sync up the code again.
+Vcs-Bzr: https://code.launchpad.net/~phablet-team/mtp/trunk
+Vcs-Browser: https://bazaar.launchpad.net/~phablet-team/mtp/trunk/files
 
 Package: libmtp0
 Section: libs
 Architecture: any
 Depends: ${misc:Depends},
-         ${shlibs:Depends}
+         ${shlibs:Depends},
 Description: A server-implementation of MTP.
  Exposes phone storage over MTP. 	  
 
 Package: libmtp-dev
 Section: libdevel
 Architecture: any
-Depends: libmtp0
-	 ${misc:Depends}
+Depends: libmtp0,
+         ${misc:Depends},
 Description: A server-implementation of MTP.
  Exposes phone storage over MTP. 	  
  .
@@ -32,7 +36,7 @@ Description: A server-implementation of MTP.
 Package: mtp-server
 Architecture: any
 Depends: ${misc:Depends},
-         ${shlibs:Depends}
+         ${shlibs:Depends},
 Description: A server-implementation of MTP.
  Exposes phone storage over MTP. 	  
  .
