@@ -98,10 +98,10 @@ private:
     }
 
 public:
-    UbuntuMtpDatabase() : counter(1)
+    UbuntuMtpDatabase(const char *dir) : counter(1)
     {
 	db = std::map<MtpObjectHandle, DbEntry>();
-	readFiles("/home/phablet");
+	readFiles(std::string(dir));
 	
         std::cout << __PRETTY_FUNCTION__ << ": object count:" << db.size() << std::endl;
     }
