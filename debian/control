@@ -7,6 +7,7 @@ Build-Depends: debhelper (>= 8.0.0),
                cmake, 
                libboost-dev,
                libboost-filesystem-dev,
+               libboost-test-dev,
 Standards-Version: 3.9.4
 Homepage: http://launchpad.net/mtp
 
