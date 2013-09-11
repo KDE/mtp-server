@@ -7,21 +7,21 @@ task
 emits android_usb-device-changed        
 
 script
-        timeout=10
-        # loop 10 times and then exit, if the property service
-        # isnt up after 80 sec # it is likely not starting at all
-        while [ ! -e /dev/socket/property_service ]; do
-                sleep 8
-                if [ "$timeout" -le 0 ]; then
-                        stop
-                        exit 0
-                fi
-                timeout=$(($timeout - 1))
-        done
-
         if [ -x /usr/bin/setprop ]; then
+                timeout=10
+                # loop 10 times and then exit, if the property service
+                # isnt up after 80 sec # it is likely not starting at all
+                while [ ! -e /dev/socket/property_service ]; do
+                        sleep 8
+                        if [ "$timeout" -le 0 ]; then
+                                stop
+                                exit 0
+                        fi
+                        timeout=$(($timeout - 1))
+                done
+
                 /usr/bin/setprop sys.usb.config mtp,adb
         fi
 
-        emit android_usb-device-changed        
+        initctl emit android_usb-device-changed        
 end script
