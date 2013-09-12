@@ -1,5 +1,6 @@
 mtp (0.0.1-0ubuntu1) UNRELEASED; urgency=low
 
   * Initial release
+  * Automatic snapshot from revision 27 (bootstrap)
 
  -- Mathieu Trudel-Lapierre <mathieu-tl@ubuntu.com>  Fri, 06 Sep 2013 16:07:38 -0400
