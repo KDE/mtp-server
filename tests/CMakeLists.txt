@@ -7,7 +7,7 @@ add_executable(
 
 target_link_libraries(
     test-utils
-    mtp
+    mtpserver
     usbhost
     ${Boost_LIBRARIES}
     ${Boost_unit_test_framework_LIBRARIES}
@@ -22,7 +22,7 @@ add_executable(
 
 target_link_libraries(
     test-debug
-    mtp
+    mtpserver
     usbhost
     ${Boost_LIBRARIES}
     ${Boost_unit_test_framework_LIBRARIES}
@@ -37,7 +37,7 @@ add_executable(
 
 target_link_libraries(
     test-packet
-    mtp
+    mtpserver
     usbhost
     ${Boost_LIBRARIES}
     ${Boost_unit_test_framework_LIBRARIES}
@@ -52,7 +52,7 @@ add_executable(
 
 target_link_libraries(
     test-property
-    mtp
+    mtpserver
     usbhost
     ${Boost_LIBRARIES}
     ${Boost_unit_test_framework_LIBRARIES}
@@ -67,7 +67,7 @@ add_executable(
 
 target_link_libraries(
     test-storage
-    mtp
+    mtpserver
     usbhost
     ${Boost_LIBRARIES}
     ${Boost_unit_test_framework_LIBRARIES}
@@ -82,7 +82,7 @@ add_executable(
 
 target_link_libraries(
     test-server
-    mtp
+    mtpserver
     usbhost
     ${Boost_LIBRARIES}
     ${Boost_unit_test_framework_LIBRARIES}

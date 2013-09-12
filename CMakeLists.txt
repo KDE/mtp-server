@@ -1,4 +1,4 @@
-project(mtp)
+project(mtpserver)
 
 cmake_minimum_required(VERSION 2.8)
 
@@ -59,12 +59,12 @@ include_directories(
 )
 
 add_library(
-    mtp SHARED
+    mtpserver SHARED
     ${MTP_SRCS}
 )
 
 set_target_properties(
-  mtp
+  mtpserver
 
   PROPERTIES
   VERSION ${MTP_VERSION_MAJOR}.${MTP_VERSION_MINOR}.${MTP_VERSION_PATCH}
@@ -72,12 +72,12 @@ set_target_properties(
 )
 
 set_target_properties(
-  mtp
+  mtpserver
   PROPERTIES PUBLIC_HEADER "${MTP_HEADERS}"
 )
 
 install(
-  TARGETS mtp
+  TARGETS mtpserver
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION lib
   PUBLIC_HEADER DESTINATION include/mtp
