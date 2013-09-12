@@ -15,20 +15,22 @@ Homepage: http://launchpad.net/mtp
 Vcs-Bzr: https://code.launchpad.net/~phablet-team/mtp/trunk
 Vcs-Browser: https://bazaar.launchpad.net/~phablet-team/mtp/trunk/files
 
-Package: libmtp0
+Package: libmtp1
 Section: libs
 Architecture: any
 Depends: ${misc:Depends},
          ${shlibs:Depends},
-Description: A server-implementation of MTP.
- Exposes phone storage over MTP. 	  
+Description: Library for implementing MTP protocol servers - shared library
+ Exposes phone storage over MTP.
+ .
+ This package contains the shared library for MTP.
 
 Package: libmtp-dev
 Section: libdevel
 Architecture: any
-Depends: libmtp0,
+Depends: libmtp1 (= ${binary:Version}),
          ${misc:Depends},
-Description: A server-implementation of MTP.
+Description: Library for implementing MTP protocol servers - development files
  Exposes phone storage over MTP. 	  
  .
  Contains header files required to develop actual services.
@@ -37,7 +39,7 @@ Package: mtp-server
 Architecture: any
 Depends: ${misc:Depends},
          ${shlibs:Depends},
-Description: A server-implementation of MTP.
+Description: Small server implementation of MTP.
  Exposes phone storage over MTP. 	  
  .
  Contains a simple MTP server that exposes images, videos, and music.
