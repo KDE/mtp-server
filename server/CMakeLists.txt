@@ -9,7 +9,7 @@ set_target_properties(mtp-server PROPERTIES COMPILE_FLAGS -fPIC)
 
 target_link_libraries(
     mtp-server
-    mtp
+    mtpserver
     usbhost
     ${Boost_LIBRARIES}
     ${Boost_system_LIBRARIES}
