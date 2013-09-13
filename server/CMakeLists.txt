@@ -11,6 +11,7 @@ target_link_libraries(
     mtp-server
     mtpserver
     usbhost
+    android-properties
     ${Boost_LIBRARIES}
     ${Boost_system_LIBRARIES}
     ${Boost_filesystem_LIBRARIES}

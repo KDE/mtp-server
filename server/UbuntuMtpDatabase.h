@@ -97,13 +97,25 @@ private:
     void readFiles(const std::string& sourcedir)
     {
         path p (sourcedir);
+	DbEntry entry;
+	MtpObjectHandle handle = counter++;
+
+        entry.storage_id = MTP_STORAGE_FIXED_RAM;
+        entry.parent = MTP_PARENT_ROOT;
+        entry.object_name = p.filename().string();
+        entry.display_name = p.filename().string();
+        entry.path = p.string();
+        entry.object_format = MTP_FORMAT_ASSOCIATION;
+        entry.object_size = 0;
+
+        db.insert( std::pair<MtpObjectHandle, DbEntry>(handle, entry) );
 
         try {
             if (exists(p)) {
                 if (is_directory(p)) {
                     std::cout << p << " is a directory containing:\n";
 
-                    parse_directory (p, MTP_PARENT_ROOT);
+                    parse_directory (p, handle);
                 }
             } else
                 std::cout << p << " does not exist\n";
@@ -117,8 +129,17 @@ private:
 public:
     UbuntuMtpDatabase(const char *dir) : counter(1)
     {
+	std::string basedir (dir);
+
 	db = std::map<MtpObjectHandle, DbEntry>();
-	readFiles(std::string(dir));
+
+
+	readFiles(basedir + "/Documents");
+
+	readFiles(basedir + "/Music");
+	readFiles(basedir + "/Videos");
+	readFiles(basedir + "/Pictures");
+	readFiles(basedir + "/Downloads");
 	
         std::cout << __PRETTY_FUNCTION__ << ": object count:" << db.size() << std::endl;
     }
