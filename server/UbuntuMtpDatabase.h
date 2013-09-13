@@ -100,20 +100,20 @@ private:
 	DbEntry entry;
 	MtpObjectHandle handle = counter++;
 
-        entry.storage_id = MTP_STORAGE_FIXED_RAM;
-        entry.parent = MTP_PARENT_ROOT;
-        entry.object_name = p.filename().string();
-        entry.display_name = p.filename().string();
-        entry.path = p.string();
-        entry.object_format = MTP_FORMAT_ASSOCIATION;
-        entry.object_size = 0;
-
-        db.insert( std::pair<MtpObjectHandle, DbEntry>(handle, entry) );
-
         try {
             if (exists(p)) {
                 if (is_directory(p)) {
                     std::cout << p << " is a directory containing:\n";
+
+                    entry.storage_id = MTP_STORAGE_FIXED_RAM;
+                    entry.parent = MTP_PARENT_ROOT;
+                    entry.object_name = p.filename().string();
+                    entry.display_name = p.filename().string();
+                    entry.path = p.string();
+                    entry.object_format = MTP_FORMAT_ASSOCIATION;
+                    entry.object_size = 0;
+
+                    db.insert( std::pair<MtpObjectHandle, DbEntry>(handle, entry) );
 
                     parse_directory (p, handle);
                 }
