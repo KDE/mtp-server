@@ -157,12 +157,14 @@ public:
     {
 	DbEntry entry;
 	MtpObjectHandle handle = counter;
-	MtpObjectHandle parent_id = parent == 0 ? MTP_PARENT_ROOT : parent;
+
+        if (parent == 0)
+            return kInvalidObjectHandle;
 
         std::cout << __PRETTY_FUNCTION__ << ": " << path << " - " << parent << std::endl;
 
         entry.storage_id = storage;
-        entry.parent = parent_id;
+        entry.parent = parent;
         entry.object_name = std::string(basename(path.c_str()));
         entry.display_name = std::string(basename(path.c_str()));
         entry.path = path;
