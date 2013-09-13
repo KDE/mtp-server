@@ -39,6 +39,8 @@
 
 #include <linux/usb/f_mtp.h>
 
+#include <hybris/properties/properties.h>
+
 namespace android {
 
 static const MtpOperationCode kSupportedOperationCodes[] = {
@@ -423,7 +425,7 @@ bool MtpServer::handleRequest() {
 MtpResponseCode MtpServer::doGetDeviceInfo() {
     ALOGV("%s", __PRETTY_FUNCTION__);
     MtpStringBuffer   string;
-    // char prop_value[PROPERTY_VALUE_MAX];
+    char prop_value[PROP_VALUE_MAX];
 
     MtpObjectFormatList* playbackFormats = mDatabase->getSupportedPlaybackFormats();
     MtpObjectFormatList* captureFormats = mDatabase->getSupportedCaptureFormats();
@@ -455,7 +457,6 @@ MtpResponseCode MtpServer::doGetDeviceInfo() {
     mData.putAUInt16(captureFormats); // Capture Formats
     mData.putAUInt16(playbackFormats);  // Playback Formats
 
-    /* TODO(tvoss): Wire up to our system property handling here.
     property_get("ro.product.manufacturer", prop_value, "unknown manufacturer");
     string.set(prop_value);
     mData.putString(string);   // Manufacturer
@@ -468,7 +469,7 @@ MtpResponseCode MtpServer::doGetDeviceInfo() {
 
     property_get("ro.serialno", prop_value, "????????");
     string.set(prop_value);
-    mData.putString(string);   // Serial Number*/
+    mData.putString(string);   // Serial Number
 
     delete playbackFormats;
     delete captureFormats;

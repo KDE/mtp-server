@@ -29,6 +29,8 @@
 #include <unistd.h>
 #include <pwd.h>
 
+#include <hybris/properties/properties.h>
+
 namespace
 {
 struct FileSystemConfig
@@ -44,6 +46,7 @@ android::MtpStorage* home_storage;
 int main(int argc, char** argv)
 {
     struct passwd *userdata = getpwuid (getuid());
+    char product_name[PROP_VALUE_MAX];
     int fd = open("/dev/mtp_usb", O_RDWR);
     
     if (fd < 0)
@@ -51,14 +54,6 @@ int main(int argc, char** argv)
         std::cout << "Error opening /dev/mtp_usb, aborting now..." << std::endl;
     }
         
-    home_storage = new android::MtpStorage(
-        MTP_STORAGE_FIXED_RAM, 
-        userdata->pw_dir,
-        userdata->pw_name, 
-        1024 * 1024 * 100,  /* 100 MB reserved space, to avoid filling the disk */
-        false,
-        1024 * 1024 * 1024 * 2  /* 2GB arbitrary max file size */);
-
     std::shared_ptr<android::MtpServer> server
     {
         new android::MtpServer(
@@ -69,6 +64,17 @@ int main(int argc, char** argv)
             FileSystemConfig::file_perm, 
             FileSystemConfig::directory_perm)
     };
+
+    property_get ("ro.product.model", product_name, "Ubuntu Touch device");
+
+    home_storage = new android::MtpStorage(
+        MTP_STORAGE_FIXED_RAM, 
+        userdata->pw_dir,
+	product_name,
+        1024 * 1024 * 100,  /* 100 MB reserved space, to avoid filling the disk */
+        false,
+        1024 * 1024 * 1024 * 2  /* 2GB arbitrary max file size */);
+
     server->addStorage(home_storage);
     server->run();
 

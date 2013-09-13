@@ -63,6 +63,11 @@ add_library(
     ${MTP_SRCS}
 )
 
+target_link_libraries(
+  mtpserver
+  android-properties
+)
+
 set_target_properties(
   mtpserver
 
