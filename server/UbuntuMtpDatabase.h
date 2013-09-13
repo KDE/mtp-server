@@ -133,9 +133,7 @@ public:
 
 	db = std::map<MtpObjectHandle, DbEntry>();
 
-
 	readFiles(basedir + "/Documents");
-
 	readFiles(basedir + "/Music");
 	readFiles(basedir + "/Videos");
 	readFiles(basedir + "/Pictures");
