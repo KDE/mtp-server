@@ -1,6 +1,13 @@
-mtp (0.0.1-0ubuntu1) UNRELEASED; urgency=low
+mtp (0.0.1+13.10.20130913-0ubuntu1) saucy; urgency=low
 
+  [ Mathieu Trudel-Lapierre ]
   * Initial release
   * Automatic snapshot from revision 27 (bootstrap)
+  * Relicense our code to GPL-3.
+  * Expose only Music, Videos, Pictures, Downloads and Documents, plus
+    set the name of the device storage to the device model.
 
- -- Mathieu Trudel-Lapierre <mathieu-tl@ubuntu.com>  Fri, 06 Sep 2013 16:07:38 -0400
+  [ Ubuntu daily release ]
+  * Automatic snapshot from revision 29
+
+ -- Ubuntu daily release <ps-jenkins@lists.canonical.com>  Fri, 13 Sep 2013 19:59:55 +0000
