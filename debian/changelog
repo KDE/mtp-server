@@ -1,12 +1,16 @@
-mtp (0.0.1+13.10.20130913-0ubuntu2) UNRELEASED; urgency=low
+mtp (0.0.1+13.10.20130918-0ubuntu1) saucy; urgency=low
 
+  [ Oliver Grawert ]
   * fix property handling so existing property settings are respected and mtp
     is only added/removed to/from the set
   * make sure we disable mtp on the usb gadget driver during shutdown so gvfsd
     on the host doesnt spill errors when the phone is rebooted because there is
     a mtp device but no server attached to it (LP: #1226825).
 
- -- Oliver Grawert <ogra@ubuntu.com>  Wed, 18 Sep 2013 16:01:44 +0200
+  [ Ubuntu daily release ]
+  * Automatic snapshot from revision 31
+
+ -- Ubuntu daily release <ps-jenkins@lists.canonical.com>  Wed, 18 Sep 2013 14:38:45 +0000
 
 mtp (0.0.1+13.10.20130913-0ubuntu1) saucy; urgency=low
 
