@@ -3,8 +3,6 @@ description "MTP protocol server bootup"
 start on android
 stop on runlevel [06]
 
-task
-
 emits android_usb-device-changed
 
 pre-start script
