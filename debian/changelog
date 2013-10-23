@@ -1,3 +1,9 @@
+mtp (0.0.1+13.10.20130926.3-0ubuntu2) trusty; urgency=low
+
+  * No change rebuild for Boost 1.54 transition.
+
+ -- Dmitrijs Ledkovs <xnox@ubuntu.com>  Tue, 22 Oct 2013 18:08:40 +0100
+
 mtp (0.0.1+13.10.20130926.3-0ubuntu1) saucy; urgency=low
 
   [ Stéphane Graber ]
