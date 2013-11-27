@@ -303,6 +303,15 @@ public:
             return MTP_RESPONSE_GENERAL_ERROR;
     }
 
+    virtual MtpResponseCode moveFile(MtpObjectHandle handle, MtpObjectHandle new_parent)
+    {
+        std::cout << __PRETTY_FUNCTION__ << std::endl;
+
+        db.at(handle).parent = new_parent;
+
+        return MTP_RESPONSE_OK;
+    }
+
     virtual MtpObjectHandleList* getObjectReferences(MtpObjectHandle handle)
     {
         std::cout << __PRETTY_FUNCTION__ << std::endl;
