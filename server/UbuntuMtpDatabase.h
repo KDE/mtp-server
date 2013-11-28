@@ -186,8 +186,13 @@ public:
         std::cout << __PRETTY_FUNCTION__ << ": " << path << std::endl;
 
 	if (!succeeded) {
-		db.erase(handle);
-	}
+            db.erase(handle);
+        } else {
+            boost::filesystem::path p (path);
+
+            /* Resync file size, just in case this is actually an Edit. */
+            db.at(handle).object_size = file_size(p);
+        }
     }
 
     virtual MtpObjectHandleList* getObjectList(
@@ -391,7 +396,7 @@ public:
         info.mStorageID = db.at(handle).storage_id;
         info.mFormat = db.at(handle).object_format;
         info.mProtectionStatus = 0x0;
-        info.mCompressedSize = 0;
+        info.mCompressedSize = db.at(handle).object_size;
         info.mImagePixWidth = 0;
         info.mImagePixHeight = 0;
         info.mImagePixDepth = 0;
