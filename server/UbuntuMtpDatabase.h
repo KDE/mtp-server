@@ -32,6 +32,7 @@
 #include <vector>
 #include <string>
 #include <tuple>
+#include <exception>
 
 #include <boost/foreach.hpp>
 #include <boost/filesystem.hpp>
@@ -74,7 +75,7 @@ private:
 
             entry.storage_id = MTP_STORAGE_FIXED_RAM;
             entry.parent = parent;
-            entry.display_name = it->filename().string();
+            entry.display_name = std::string(it->filename().string());
             entry.path = it->string();
 
             if (is_regular_file (*it)) {
@@ -106,7 +107,7 @@ private:
 
                     entry.storage_id = MTP_STORAGE_FIXED_RAM;
                     entry.parent = MTP_PARENT_ROOT;
-                    entry.display_name = p.filename().string();
+                    entry.display_name = std::string(p.filename().string());
                     entry.path = p.string();
                     entry.object_format = MTP_FORMAT_ASSOCIATION;
                     entry.object_size = 0;
@@ -306,29 +307,37 @@ public:
         MtpStringBuffer buffer;
         std::string oldname;
         std::string newname;
-        std::string oldpath;
-        std::string newpath;
+        path oldpath;
+        path newpath;
 
         std::cout << __PRETTY_FUNCTION__ << std::endl;
 
         switch(property)
         {
             case MTP_PROPERTY_OBJECT_FILE_NAME:
-                entry = db.at(handle);
+                try {
+                    entry = db.at(handle);
 
-                packet.getString(buffer);
-                oldname = entry.display_name;
-                newname = strdup(buffer);
+                    packet.getString(buffer);
+                    newname = strdup(buffer);
 
-                oldpath = entry.path;
-                newpath = path(entry.path).branch_path().string();
-                newpath += "/";
-                newpath += newname;
+                    oldpath /= entry.path;
+                    newpath /= oldpath.branch_path() / "/" / newname;
 
-                db.at(handle).display_name = newname;
-                db.at(handle).path = newpath;
+                    boost::filesystem::rename(oldpath, newpath);
 
-                rename(oldpath.c_str(), newpath.c_str());
+                    db.at(handle).display_name = newname;
+                    db.at(handle).path = newpath.string();
+                } catch (filesystem_error& fe) {
+                    std::cout << "ERROR: " << fe.what() << std::endl;
+                    return MTP_RESPONSE_DEVICE_BUSY;
+                } catch (std::exception& e) {
+                    std::cout << "ERROR: " << e.what() << std::endl;
+                    return MTP_RESPONSE_GENERAL_ERROR;
+                } catch (...) {
+                    std::cout << "ERROR: autre exception" << std::endl;
+                    return MTP_RESPONSE_GENERAL_ERROR;
+		}
 
                 break;
             default: return MTP_RESPONSE_OPERATION_NOT_SUPPORTED; break;
