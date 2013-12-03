@@ -21,6 +21,7 @@
 #include <mtp.h>
 #include <MtpDatabase.h>
 #include <MtpDataPacket.h>
+#include <MtpStringBuffer.h>
 #include <MtpObjectInfo.h>
 #include <MtpProperty.h>
 
@@ -31,7 +32,10 @@
 #include <vector>
 #include <string>
 #include <tuple>
+#include <exception>
 
+#include <boost/algorithm/string.hpp>
+#include <boost/assign/list_of.hpp>
 #include <boost/foreach.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/range/adaptors.hpp>
@@ -46,7 +50,6 @@ private:
     struct DbEntry
     {
         MtpStorageID storage_id;
-        std::string object_name;
         MtpObjectFormat object_format;
         MtpObjectHandle parent;
         size_t object_size;
@@ -56,7 +59,31 @@ private:
 
     uint32_t counter;
     std::map<MtpObjectHandle, DbEntry> db;
-    
+    std::map<std::string, MtpObjectFormat> formats = boost::assign::map_list_of
+        (".ogg", MTP_FORMAT_OGG)
+        (".mp3", MTP_FORMAT_MP3)
+        (".wav", MTP_FORMAT_WAV)
+        (".wma", MTP_FORMAT_WMA)
+        (".aac", MTP_FORMAT_AAC)
+        (".flac", MTP_FORMAT_FLAC);
+
+    MtpObjectFormat guess_object_format(std::string extension)
+    {
+        std::map<std::string, MtpObjectFormat>::iterator it;
+
+        std::cout << __PRETTY_FUNCTION__ << "  extension: " << extension << std::endl;
+        it = formats.find(extension);
+        if (it == formats.end()) {
+            boost::to_upper(extension);
+            it = formats.find(extension);
+            if (it == formats.end()) {
+                return MTP_FORMAT_UNDEFINED;
+            }
+	}
+
+	return it->second;
+    }
+
     void parse_directory(path p, MtpObjectHandle parent)
     {
 	DbEntry entry;
@@ -74,13 +101,14 @@ private:
 
             entry.storage_id = MTP_STORAGE_FIXED_RAM;
             entry.parent = parent;
-            entry.object_name = it->filename().string();
-            entry.display_name = it->filename().string();
+            entry.display_name = std::string(it->filename().string());
             entry.path = it->string();
 
             if (is_regular_file (*it)) {
-                entry.object_format = MTP_FORMAT_DEFINED;
+                entry.object_format = guess_object_format(it->extension().string());
                 entry.object_size = file_size(*it);
+
+                std::cout << " format: " << std::hex << entry.object_format << std::endl;
 
                 db.insert( std::pair<MtpObjectHandle, DbEntry>(handle, entry) );
             } else if (is_directory (*it)) {
@@ -107,8 +135,7 @@ private:
 
                     entry.storage_id = MTP_STORAGE_FIXED_RAM;
                     entry.parent = MTP_PARENT_ROOT;
-                    entry.object_name = p.filename().string();
-                    entry.display_name = p.filename().string();
+                    entry.display_name = std::string(p.filename().string());
                     entry.path = p.string();
                     entry.object_format = MTP_FORMAT_ASSOCIATION;
                     entry.object_size = 0;
@@ -163,7 +190,6 @@ public:
 
         entry.storage_id = storage;
         entry.parent = parent;
-        entry.object_name = std::string(basename(path.c_str()));
         entry.display_name = std::string(basename(path.c_str()));
         entry.path = path;
         entry.object_format = format;
@@ -188,8 +214,15 @@ public:
         std::cout << __PRETTY_FUNCTION__ << ": " << path << std::endl;
 
 	if (!succeeded) {
-		db.erase(handle);
-	}
+            db.erase(handle);
+        } else {
+            boost::filesystem::path p (path);
+
+            if (format != MTP_FORMAT_ASSOCIATION) {
+                /* Resync file size, just in case this is actually an Edit. */
+                db.at(handle).object_size = file_size(p);
+            }
+        }
     }
 
     virtual MtpObjectHandleList* getObjectList(
@@ -238,7 +271,28 @@ public:
     virtual MtpObjectFormatList* getSupportedPlaybackFormats()
     {
         std::cout << __PRETTY_FUNCTION__ << std::endl;
-        static const MtpObjectFormatList list = {MTP_FORMAT_PNG};
+        static const MtpObjectFormatList list = {
+            /* Generic files */
+            MTP_FORMAT_UNDEFINED,
+
+            /* Supported audio formats */
+            MTP_FORMAT_OGG,
+            MTP_FORMAT_MP3,
+            MTP_FORMAT_WAV,
+            MTP_FORMAT_WMA,
+            MTP_FORMAT_AAC,
+            MTP_FORMAT_FLAC,
+
+            /* Supported video formats */
+            // none listed yet, video apparently broken.
+
+            /* Audio album, and album art */
+            MTP_FORMAT_ABSTRACT_AUDIO_ALBUM,
+
+            /* Playlists for audio and video */
+            MTP_FORMAT_ABSTRACT_AV_PLAYLIST,
+        };
+
         return new MtpObjectFormatList{list};
     }
     
@@ -266,6 +320,7 @@ public:
             MTP_PROPERTY_WIDTH,
             MTP_PROPERTY_HEIGHT,
             MTP_PROPERTY_IMAGE_BIT_DEPTH,
+            MTP_PROPERTY_OBJECT_FILE_NAME,
             MTP_PROPERTY_DISPLAY_NAME            
         };
          
@@ -292,6 +347,7 @@ public:
             case MTP_PROPERTY_OBJECT_FORMAT: packet.putUInt32(db.at(handle).object_format); break;
             case MTP_PROPERTY_OBJECT_SIZE: packet.putUInt32(db.at(handle).object_size); break;
             case MTP_PROPERTY_DISPLAY_NAME: packet.putString(db.at(handle).display_name.c_str()); break;
+            case MTP_PROPERTY_OBJECT_FILE_NAME: packet.putString(db.at(handle).display_name.c_str()); break;
             default: return MTP_RESPONSE_GENERAL_ERROR; break;                
         }
         
@@ -303,8 +359,47 @@ public:
         MtpObjectProperty property,
         MtpDataPacket& packet)
     {
+        DbEntry entry;
+        MtpStringBuffer buffer;
+        std::string oldname;
+        std::string newname;
+        path oldpath;
+        path newpath;
+
         std::cout << __PRETTY_FUNCTION__ << std::endl;
-        return MTP_RESPONSE_OPERATION_NOT_SUPPORTED;
+
+        switch(property)
+        {
+            case MTP_PROPERTY_OBJECT_FILE_NAME:
+                try {
+                    entry = db.at(handle);
+
+                    packet.getString(buffer);
+                    newname = strdup(buffer);
+
+                    oldpath /= entry.path;
+                    newpath /= oldpath.branch_path() / "/" / newname;
+
+                    boost::filesystem::rename(oldpath, newpath);
+
+                    db.at(handle).display_name = newname;
+                    db.at(handle).path = newpath.string();
+                } catch (filesystem_error& fe) {
+                    std::cout << "ERROR: " << fe.what() << std::endl;
+                    return MTP_RESPONSE_DEVICE_BUSY;
+                } catch (std::exception& e) {
+                    std::cout << "ERROR: " << e.what() << std::endl;
+                    return MTP_RESPONSE_GENERAL_ERROR;
+                } catch (...) {
+                    std::cout << "ERROR: autre exception" << std::endl;
+                    return MTP_RESPONSE_GENERAL_ERROR;
+		}
+
+                break;
+            default: return MTP_RESPONSE_OPERATION_NOT_SUPPORTED; break;
+        }
+        
+        return MTP_RESPONSE_OK;
     }
 
     virtual MtpResponseCode getDevicePropertyValue(
@@ -347,23 +442,20 @@ public:
         MtpObjectInfo& info)
     {
         std::cout << __PRETTY_FUNCTION__ << std::endl;
+
         info.mHandle = handle;
         info.mStorageID = db.at(handle).storage_id;
         info.mFormat = db.at(handle).object_format;
         info.mProtectionStatus = 0x0;
-        info.mCompressedSize = 0;
-        info.mThumbFormat = db.at(handle).object_format;
-        info.mThumbCompressedSize = 20*20*4;
-        info.mThumbPixWidth = 20;
-        info.mThumbPixHeight  =20;
-        info.mImagePixWidth = 20;
-        info.mImagePixHeight = 20;
-        info.mImagePixDepth = 4;
+        info.mCompressedSize = db.at(handle).object_size;
+        info.mImagePixWidth = 0;
+        info.mImagePixHeight = 0;
+        info.mImagePixDepth = 0;
         info.mParent = db.at(handle).parent;
         info.mAssociationType = 0;
         info.mAssociationDesc = 0;
         info.mSequenceNumber = 0;
-        info.mName = ::strdup(db.at(handle).object_name.c_str());
+        info.mName = ::strdup(db.at(handle).display_name.c_str());
         info.mDateCreated = 0;
         info.mDateModified = 0;
         info.mKeywords = ::strdup("ubuntu,touch");
@@ -422,16 +514,17 @@ public:
             return MTP_RESPONSE_GENERAL_ERROR;
     }
 
-    /*
     virtual MtpResponseCode moveFile(MtpObjectHandle handle, MtpObjectHandle new_parent)
     {
         std::cout << __PRETTY_FUNCTION__ << std::endl;
 
         // change parent
+        db.at(handle).parent = new_parent;
 
-        return MTP_RESPONSE_OK
+        return MTP_RESPONSE_OK;
     }
 
+    /*
     virtual MtpResponseCode copyFile(MtpObjectHandle handle, MtpObjectHandle new_parent)
     {
         std::cout << __PRETTY_FUNCTION__ << std::endl;
@@ -471,7 +564,8 @@ public:
             case MTP_PROPERTY_WIDTH: result = new MtpProperty(property, MTP_TYPE_UINT32); break;
             case MTP_PROPERTY_HEIGHT: result = new MtpProperty(property, MTP_TYPE_UINT32); break;
             case MTP_PROPERTY_IMAGE_BIT_DEPTH: result = new MtpProperty(property, MTP_TYPE_UINT32); break;
-            case MTP_PROPERTY_DISPLAY_NAME: result = new MtpProperty(property, MTP_TYPE_STR); break;
+            case MTP_PROPERTY_DISPLAY_NAME: result = new MtpProperty(property, MTP_TYPE_STR, true); break;
+            case MTP_PROPERTY_OBJECT_FILE_NAME: result = new MtpProperty(property, MTP_TYPE_STR, true); break;
             default: break;                
         }
         

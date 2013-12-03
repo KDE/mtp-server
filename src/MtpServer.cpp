@@ -68,7 +68,7 @@ static const MtpOperationCode kSupportedOperationCodes[] = {
     MTP_OPERATION_SET_DEVICE_PROP_VALUE,
     MTP_OPERATION_RESET_DEVICE_PROP_VALUE,
 //    MTP_OPERATION_TERMINATE_OPEN_CAPTURE,
-//    MTP_OPERATION_MOVE_OBJECT,
+    MTP_OPERATION_MOVE_OBJECT,
 //    MTP_OPERATION_COPY_OBJECT,
     MTP_OPERATION_GET_PARTIAL_OBJECT,
 //    MTP_OPERATION_INITIATE_OPEN_CAPTURE,
@@ -96,6 +96,8 @@ static const MtpEventCode kSupportedEventCodes[] = {
     MTP_EVENT_OBJECT_REMOVED,
     MTP_EVENT_STORE_ADDED,
     MTP_EVENT_STORE_REMOVED,
+    MTP_EVENT_OBJECT_INFO_CHANGED,
+    MTP_EVENT_OBJECT_PROP_CHANGED,
 };
 
 MtpServer::MtpServer(int fd, MtpDatabase* database, bool ptp,
@@ -246,29 +248,45 @@ void MtpServer::run() {
 
 void MtpServer::sendObjectAdded(MtpObjectHandle handle) {
     ALOGV("sendObjectAdded %d\n", handle);
-    sendEvent(MTP_EVENT_OBJECT_ADDED, handle);
+    sendEvent(MTP_EVENT_OBJECT_ADDED, handle, 0, 0);
 }
 
 void MtpServer::sendObjectRemoved(MtpObjectHandle handle) {
     ALOGV("sendObjectRemoved %d\n", handle);
-    sendEvent(MTP_EVENT_OBJECT_REMOVED, handle);
+    sendEvent(MTP_EVENT_OBJECT_REMOVED, handle, 0, 0);
+}
+
+void MtpServer::sendObjectInfoChanged(MtpObjectHandle handle) {
+    ALOGV("sendObjectInfoChanged %d\n", handle);
+    sendEvent(MTP_EVENT_OBJECT_INFO_CHANGED, handle, 0, 0);
+}
+
+void MtpServer::sendObjectPropChanged(MtpObjectHandle handle,
+                                      MtpObjectProperty prop) {
+    ALOGV("sendObjectPropChanged %d %d\n", handle, prop);
+    sendEvent(MTP_EVENT_OBJECT_PROP_CHANGED, handle, prop, 0);
 }
 
 void MtpServer::sendStoreAdded(MtpStorageID id) {
     ALOGV("sendStoreAdded %08X\n", id);
-    sendEvent(MTP_EVENT_STORE_ADDED, id);
+    sendEvent(MTP_EVENT_STORE_ADDED, id, 0, 0);
 }
 
 void MtpServer::sendStoreRemoved(MtpStorageID id) {
     ALOGV("sendStoreRemoved %08X\n", id);
-    sendEvent(MTP_EVENT_STORE_REMOVED, id);
+    sendEvent(MTP_EVENT_STORE_REMOVED, id, 0, 0);
 }
 
-void MtpServer::sendEvent(MtpEventCode code, uint32_t param1) {
+void MtpServer::sendEvent(MtpEventCode code,
+                          uint32_t param1,
+                          uint32_t param2,
+                          uint32_t param3) {
     if (mSessionOpen) {
         mEvent.setEventCode(code);
         mEvent.setTransactionID(mRequest.getTransactionID());
         mEvent.setParameter(1, param1);
+        mEvent.setParameter(2, param2);
+        mEvent.setParameter(3, param3);
         int ret = mEvent.write(mFD);
         ALOGV("mEvent.write returned %d\n", ret);
     }
@@ -391,6 +409,9 @@ bool MtpServer::handleRequest() {
             break;
         case MTP_OPERATION_DELETE_OBJECT:
             response = doDeleteObject();
+            break;
+        case MTP_OPERATION_MOVE_OBJECT:
+            response = doMoveObject();
             break;
         case MTP_OPERATION_GET_OBJECT_PROP_DESC:
             response = doGetObjectPropDesc();
@@ -625,6 +646,8 @@ MtpResponseCode MtpServer::doGetObjectPropValue() {
 }
 
 MtpResponseCode MtpServer::doSetObjectPropValue() {
+    MtpResponseCode response;
+
     if (!hasStorage())
         return MTP_RESPONSE_INVALID_OBJECT_HANDLE;
     MtpObjectHandle handle = mRequest.getParameter(1);
@@ -632,7 +655,11 @@ MtpResponseCode MtpServer::doSetObjectPropValue() {
     ALOGV("SetObjectPropValue %d %s\n", handle,
             MtpDebug::getObjectPropCodeName(property));
 
-    return mDatabase->setObjectPropertyValue(handle, property, mData);
+    response = mDatabase->setObjectPropertyValue(handle, property, mData);
+
+    //sendObjectPropChanged(handle, property);
+
+    return response;
 }
 
 MtpResponseCode MtpServer::doGetDevicePropValue() {
@@ -1059,6 +1086,30 @@ MtpResponseCode MtpServer::doDeleteObject() {
         // Don't delete the actual files unless the database deletion is allowed
         if (result == MTP_RESPONSE_OK) {
             deletePath(filePath.c_str());
+        }
+    }
+
+    return result;
+}
+
+MtpResponseCode MtpServer::doMoveObject() {
+    if (!hasStorage())
+        return MTP_RESPONSE_INVALID_OBJECT_HANDLE;
+    MtpObjectHandle handle = mRequest.getParameter(1);
+    MtpObjectFormat format = mRequest.getParameter(2);
+    MtpObjectHandle newparent = mRequest.getParameter(3);
+
+    MtpString filePath;
+    MtpString newPath;
+    int64_t fileLength;
+    int result = mDatabase->getObjectFilePath(handle, filePath, fileLength, format);
+    result = mDatabase->getObjectFilePath(handle, newPath, fileLength, format);
+    if (result == MTP_RESPONSE_OK) {
+        ALOGV("moving %s to %s", filePath.c_str(), newPath.c_str());
+        result = mDatabase->moveFile(handle, newparent);
+        // Don't move the actual files unless the database deletion is allowed
+        if (result == MTP_RESPONSE_OK) {
+            rename(filePath.c_str(), newPath.c_str());
         }
     }
 

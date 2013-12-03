@@ -104,11 +104,17 @@ public:
 
     void                sendObjectAdded(MtpObjectHandle handle);
     void                sendObjectRemoved(MtpObjectHandle handle);
+    void                sendObjectInfoChanged(MtpObjectHandle handle);
+    void                sendObjectPropChanged(MtpObjectHandle handle,
+                                              MtpObjectProperty prop);
 
 private:
     void                sendStoreAdded(MtpStorageID id);
     void                sendStoreRemoved(MtpStorageID id);
-    void                sendEvent(MtpEventCode code, uint32_t param1);
+    void                sendEvent(MtpEventCode code,
+                                  uint32_t param1,
+                                  uint32_t param2,
+                                  uint32_t param3);
 
     void                addEditObject(MtpObjectHandle handle, MtpString& path,
                                 uint64_t size, MtpObjectFormat format, int fd);
@@ -141,6 +147,7 @@ private:
     MtpResponseCode     doSendObjectInfo();
     MtpResponseCode     doSendObject();
     MtpResponseCode     doDeleteObject();
+    MtpResponseCode     doMoveObject();
     MtpResponseCode     doGetObjectPropDesc();
     MtpResponseCode     doGetDevicePropDesc();
     MtpResponseCode     doSendPartialObject();

@@ -1,3 +1,9 @@
+mtp (0.0.2+14.04.20131127-0ubuntu1) UNRELEASED; urgency=low
+
+  * New release.
+
+ -- Mathieu Trudel-Lapierre <mathieu-tl@ubuntu.com>  Wed, 27 Nov 2013 13:35:01 -0500
+
 mtp (0.0.1+13.10.20130926.3-0ubuntu2) trusty; urgency=low
 
   * No change rebuild for Boost 1.54 transition.

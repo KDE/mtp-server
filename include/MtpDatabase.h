@@ -93,6 +93,9 @@ public:
 
     virtual MtpResponseCode         deleteFile(MtpObjectHandle handle) = 0;
 
+    virtual MtpResponseCode         moveFile(MtpObjectHandle handle,
+                                            MtpObjectHandle new_parent) = 0;
+
     virtual MtpObjectHandleList*    getObjectReferences(MtpObjectHandle handle) = 0;
 
     virtual MtpResponseCode         setObjectReferences(MtpObjectHandle handle,
