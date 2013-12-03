@@ -77,7 +77,7 @@ private:
             boost::to_upper(extension);
             it = formats.find(extension);
             if (it == formats.end()) {
-                return MTP_FORMAT_DEFINED;
+                return MTP_FORMAT_UNDEFINED;
             }
 	}
 
@@ -218,8 +218,10 @@ public:
         } else {
             boost::filesystem::path p (path);
 
-            /* Resync file size, just in case this is actually an Edit. */
-            db.at(handle).object_size = file_size(p);
+            if (format != MTP_FORMAT_ASSOCIATION) {
+                /* Resync file size, just in case this is actually an Edit. */
+                db.at(handle).object_size = file_size(p);
+            }
         }
     }
 
@@ -269,7 +271,28 @@ public:
     virtual MtpObjectFormatList* getSupportedPlaybackFormats()
     {
         std::cout << __PRETTY_FUNCTION__ << std::endl;
-        static const MtpObjectFormatList list = {MTP_FORMAT_PNG};
+        static const MtpObjectFormatList list = {
+            /* Generic files */
+            MTP_FORMAT_UNDEFINED,
+
+            /* Supported audio formats */
+            MTP_FORMAT_OGG,
+            MTP_FORMAT_MP3,
+            MTP_FORMAT_WAV,
+            MTP_FORMAT_WMA,
+            MTP_FORMAT_AAC,
+            MTP_FORMAT_FLAC,
+
+            /* Supported video formats */
+            // none listed yet, video apparently broken.
+
+            /* Audio album, and album art */
+            MTP_FORMAT_ABSTRACT_AUDIO_ALBUM,
+
+            /* Playlists for audio and video */
+            MTP_FORMAT_ABSTRACT_AV_PLAYLIST,
+        };
+
         return new MtpObjectFormatList{list};
     }
     
