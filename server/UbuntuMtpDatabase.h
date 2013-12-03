@@ -34,6 +34,8 @@
 #include <tuple>
 #include <exception>
 
+#include <boost/algorithm/string.hpp>
+#include <boost/assign/list_of.hpp>
 #include <boost/foreach.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/range/adaptors.hpp>
@@ -57,7 +59,31 @@ private:
 
     uint32_t counter;
     std::map<MtpObjectHandle, DbEntry> db;
-    
+    std::map<std::string, MtpObjectFormat> formats = boost::assign::map_list_of
+        (".ogg", MTP_FORMAT_OGG)
+        (".mp3", MTP_FORMAT_MP3)
+        (".wav", MTP_FORMAT_WAV)
+        (".wma", MTP_FORMAT_WMA)
+        (".aac", MTP_FORMAT_AAC)
+        (".flac", MTP_FORMAT_FLAC);
+
+    MtpObjectFormat guess_object_format(std::string extension)
+    {
+        std::map<std::string, MtpObjectFormat>::iterator it;
+
+        std::cout << __PRETTY_FUNCTION__ << "  extension: " << extension << std::endl;
+        it = formats.find(extension);
+        if (it == formats.end()) {
+            boost::to_upper(extension);
+            it = formats.find(extension);
+            if (it == formats.end()) {
+                return MTP_FORMAT_DEFINED;
+            }
+	}
+
+	return it->second;
+    }
+
     void parse_directory(path p, MtpObjectHandle parent)
     {
 	DbEntry entry;
@@ -79,8 +105,10 @@ private:
             entry.path = it->string();
 
             if (is_regular_file (*it)) {
-                entry.object_format = MTP_FORMAT_DEFINED;
+                entry.object_format = guess_object_format(it->extension().string());
                 entry.object_size = file_size(*it);
+
+                std::cout << " format: " << std::hex << entry.object_format << std::endl;
 
                 db.insert( std::pair<MtpObjectHandle, DbEntry>(handle, entry) );
             } else if (is_directory (*it)) {
