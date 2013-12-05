@@ -1,8 +1,15 @@
-mtp (0.0.2+14.04.20131127-0ubuntu1) UNRELEASED; urgency=low
+mtp (0.0.2+14.04.20131205-0ubuntu1) trusty; urgency=low
 
+  [ Mathieu Trudel-Lapierre ]
   * New release.
 
- -- Mathieu Trudel-Lapierre <mathieu-tl@ubuntu.com>  Wed, 27 Nov 2013 13:35:01 -0500
+  [ Sergio Schvezov ]
+  * Enabling/disabling mtp by tracking the cable state.
+
+  [ Ubuntu daily release ]
+  * Automatic snapshot from revision 37
+
+ -- Ubuntu daily release <ps-jenkins@lists.canonical.com>  Thu, 05 Dec 2013 07:38:37 +0000
 
 mtp (0.0.1+13.10.20130926.3-0ubuntu2) trusty; urgency=low
 
