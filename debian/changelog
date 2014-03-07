@@ -1,3 +1,10 @@
+mtp (0.0.2+14.04.20140307-0ubuntu1) trusty; urgency=low
+
+  [ Oliver Grawert ]
+  * Fix the installation of the mtp-state.conf upstart job file
+
+ -- Ubuntu daily release <ps-jenkins@lists.canonical.com>  Fri, 07 Mar 2014 19:40:09 +0000
+
 mtp (0.0.2+14.04.20131205-0ubuntu2) trusty; urgency=medium
 
   * add mtp-state upstart job to monitor persist.sys.usb.config for mtp setup
