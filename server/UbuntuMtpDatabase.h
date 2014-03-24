@@ -60,6 +60,10 @@ private:
     uint32_t counter;
     std::map<MtpObjectHandle, DbEntry> db;
     std::map<std::string, MtpObjectFormat> formats = boost::assign::map_list_of
+        (".gif", MTP_FORMAT_GIF)
+        (".png", MTP_FORMAT_PNG)
+        (".jpeg", MTP_FORMAT_JFIF)
+        (".tiff", MTP_FORMAT_TIFF)
         (".ogg", MTP_FORMAT_OGG)
         (".mp3", MTP_FORMAT_MP3)
         (".wav", MTP_FORMAT_WAV)
