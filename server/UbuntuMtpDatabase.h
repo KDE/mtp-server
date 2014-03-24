@@ -71,7 +71,6 @@ private:
     {
         std::map<std::string, MtpObjectFormat>::iterator it;
 
-        std::cout << __PRETTY_FUNCTION__ << "  extension: " << extension << std::endl;
         it = formats.find(extension);
         if (it == formats.end()) {
             boost::to_upper(extension);
@@ -97,8 +96,6 @@ private:
 
             counter++;
 
-            std::cout << "   " << *it << " handle: " << handle << " parent: " << parent << std::endl;
-
             entry.storage_id = MTP_STORAGE_FIXED_RAM;
             entry.parent = parent;
             entry.display_name = std::string(it->filename().string());
@@ -107,8 +104,6 @@ private:
             if (is_regular_file (*it)) {
                 entry.object_format = guess_object_format(it->extension().string());
                 entry.object_size = file_size(*it);
-
-                std::cout << " format: " << std::hex << entry.object_format << std::endl;
 
                 db.insert( std::pair<MtpObjectHandle, DbEntry>(handle, entry) );
             } else if (is_directory (*it)) {
@@ -131,8 +126,6 @@ private:
         try {
             if (exists(p)) {
                 if (is_directory(p)) {
-                    std::cout << p << " is a directory containing:\n";
-
                     entry.storage_id = MTP_STORAGE_FIXED_RAM;
                     entry.parent = MTP_PARENT_ROOT;
                     entry.display_name = std::string(p.filename().string());
@@ -165,8 +158,8 @@ public:
 	readFiles(basedir + "/Videos");
 	readFiles(basedir + "/Pictures");
 	readFiles(basedir + "/Downloads");
-	
-        std::cout << __PRETTY_FUNCTION__ << ": object count:" << db.size() << std::endl;
+
+	std::cout << "Added " << counter << " entries to the database." << std::endl;
     }
 
     virtual ~UbuntuMtpDatabase() {}
