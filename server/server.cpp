@@ -30,6 +30,7 @@
 #include <pwd.h>
 
 #include <hybris/properties/properties.h>
+#include <glog/logging.h>
 
 namespace
 {
@@ -48,12 +49,16 @@ int main(int argc, char** argv)
     struct passwd *userdata = getpwuid (getuid());
     char product_name[PROP_VALUE_MAX];
     int fd = open("/dev/mtp_usb", O_RDWR);
-    
+
+    google::InitGoogleLogging(argv[0]);
+
+    LOG(INFO) << "MTP server starting...";
+
     if (fd < 0)
     {
-        std::cout << "Error opening /dev/mtp_usb, aborting now..." << std::endl;
+        LOG(FATAL) << "Error opening /dev/mtp_usb, aborting now...";
     }
-        
+ 
     std::shared_ptr<android::MtpServer> server
     {
         new android::MtpServer(
@@ -90,5 +95,4 @@ int main(int argc, char** argv)
       if (t.joinable())
       t.join();
     */
-    
 }

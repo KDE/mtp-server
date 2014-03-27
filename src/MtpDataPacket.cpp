@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#define LOG_TAG "MtpDataPacket"
-
 #include <cstdio>
 #include <cstring>
 
@@ -24,6 +22,7 @@
 #include <unistd.h>
 
 #include <usbhost/usbhost.h>
+#include <glog/logging.h>
 
 #include "MtpDataPacket.h"
 #include "MtpStringBuffer.h"
@@ -421,7 +420,7 @@ int MtpDataPacket::readData(struct usb_request *request, void* buffer, int lengt
 // Queue a read request.  Call readDataWait to wait for result
 int MtpDataPacket::readDataAsync(struct usb_request *req) {
     if (usb_request_queue(req)) {
-        ALOGE("usb_endpoint_queue failed, errno: %d", errno);
+        PLOG(ERROR) << "usb_endpoint_queue failed";
         return -1;
     }
     return 0;

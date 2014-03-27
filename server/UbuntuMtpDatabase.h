@@ -24,6 +24,7 @@
 #include <MtpStringBuffer.h>
 #include <MtpObjectInfo.h>
 #include <MtpProperty.h>
+#include <MtpDebug.h>
 
 #include <cstdlib>
 #include <cstring>
@@ -40,6 +41,8 @@
 #include <boost/filesystem.hpp>
 #include <boost/range/adaptors.hpp>
 #include <boost/range/algorithm.hpp>
+
+#include <glog/logging.h>
 
 using namespace boost::filesystem;
 
@@ -183,7 +186,7 @@ public:
         if (parent == 0)
             return kInvalidObjectHandle;
 
-        std::cout << __PRETTY_FUNCTION__ << ": " << path << " - " << parent << std::endl;
+        VLOG(1) << __PRETTY_FUNCTION__ << ": " << path << " - " << parent;
 
         entry.storage_id = storage;
         entry.parent = parent;
@@ -208,7 +211,7 @@ public:
         MtpObjectFormat format,
         bool succeeded)
     {
-        std::cout << __PRETTY_FUNCTION__ << ": " << path << std::endl;
+        VLOG(1) << __PRETTY_FUNCTION__ << ": " << path;
 
 	if (!succeeded) {
             db.erase(handle);
@@ -227,7 +230,7 @@ public:
         MtpObjectFormat format,
         MtpObjectHandle parent)
     {
-        std::cout << __PRETTY_FUNCTION__ << ": " << storageID << ", " << format << ", " << parent << std::endl;
+        VLOG(1) << __PRETTY_FUNCTION__ << ": " << storageID << ", " << format << ", " << parent;
         MtpObjectHandleList* list = nullptr;
         try
         {
@@ -252,7 +255,7 @@ public:
         MtpObjectFormat format,
         MtpObjectHandle parent)
     {
-        std::cout << __PRETTY_FUNCTION__ << ": " << storageID << ", " << format << ", " << parent << std::endl;
+        VLOG(1) << __PRETTY_FUNCTION__ << ": " << storageID << ", " << format << ", " << parent;
         try
         {
             return db.size();
@@ -267,7 +270,7 @@ public:
     // results can be NULL
     virtual MtpObjectFormatList* getSupportedPlaybackFormats()
     {
-        std::cout << __PRETTY_FUNCTION__ << std::endl;
+        VLOG(1) << __PRETTY_FUNCTION__;
         static const MtpObjectFormatList list = {
             /* Generic files */
             MTP_FORMAT_UNDEFINED,
@@ -295,14 +298,14 @@ public:
     
     virtual MtpObjectFormatList* getSupportedCaptureFormats()
     {
-        std::cout << __PRETTY_FUNCTION__ << std::endl;
+        VLOG(1) << __PRETTY_FUNCTION__;
         static const MtpObjectFormatList list = {MTP_FORMAT_ASSOCIATION, MTP_FORMAT_PNG};
         return new MtpObjectFormatList{list};
     }
     
     virtual MtpObjectPropertyList* getSupportedObjectProperties(MtpObjectFormat format)
     {
-        std::cout << __PRETTY_FUNCTION__ << std::endl;
+        VLOG(1) << __PRETTY_FUNCTION__;
 	/*
         if (format != MTP_FORMAT_PNG)
             return nullptr;
@@ -326,7 +329,7 @@ public:
     
     virtual MtpDevicePropertyList* getSupportedDeviceProperties()
     {
-        std::cout << __PRETTY_FUNCTION__ << std::endl;
+        VLOG(1) << __PRETTY_FUNCTION__;
         static const MtpDevicePropertyList list = { MTP_DEVICE_PROPERTY_UNDEFINED };
         return new MtpDevicePropertyList{list};
     }
@@ -336,7 +339,10 @@ public:
         MtpObjectProperty property,
         MtpDataPacket& packet)
     {        
-        std::cout << __PRETTY_FUNCTION__ << std::endl;
+        VLOG(1) << __PRETTY_FUNCTION__
+                << " handle: " << handle
+                << " property: " << MtpDebug::getObjectPropCodeName(property);
+
         switch(property)
         {
             case MTP_PROPERTY_STORAGE_ID: packet.putUInt32(db.at(handle).storage_id); break;            
@@ -363,7 +369,9 @@ public:
         path oldpath;
         path newpath;
 
-        std::cout << __PRETTY_FUNCTION__ << std::endl;
+        VLOG(1) << __PRETTY_FUNCTION__
+                << " handle: " << handle
+                << " property: " << MtpDebug::getObjectPropCodeName(property);
 
         switch(property)
         {
@@ -382,13 +390,13 @@ public:
                     db.at(handle).display_name = newname;
                     db.at(handle).path = newpath.string();
                 } catch (filesystem_error& fe) {
-                    std::cout << "ERROR: " << fe.what() << std::endl;
+                    LOG(ERROR) << fe.what();
                     return MTP_RESPONSE_DEVICE_BUSY;
                 } catch (std::exception& e) {
-                    std::cout << "ERROR: " << e.what() << std::endl;
+                    LOG(ERROR) << e.what();
                     return MTP_RESPONSE_GENERAL_ERROR;
                 } catch (...) {
-                    std::cout << "ERROR: autre exception" << std::endl;
+                    LOG(ERROR) << "An unexpected error has occurred";
                     return MTP_RESPONSE_GENERAL_ERROR;
 		}
 
@@ -403,7 +411,7 @@ public:
         MtpDeviceProperty property,
         MtpDataPacket& packet)
     {
-        std::cout << __PRETTY_FUNCTION__ << std::endl;
+        VLOG(1) << __PRETTY_FUNCTION__;
         return MTP_RESPONSE_GENERAL_ERROR;
     }
 
@@ -411,14 +419,14 @@ public:
         MtpDeviceProperty property,
         MtpDataPacket& packet)
     {
-        std::cout << __PRETTY_FUNCTION__ << std::endl;
+        VLOG(1) << __PRETTY_FUNCTION__;
         return MTP_RESPONSE_OPERATION_NOT_SUPPORTED;
     }
 
     virtual MtpResponseCode resetDeviceProperty(
         MtpDeviceProperty property)
     {
-        std::cout << __PRETTY_FUNCTION__ << std::endl;
+        VLOG(1) << __PRETTY_FUNCTION__;
         return MTP_RESPONSE_OPERATION_NOT_SUPPORTED;
     }
 
@@ -430,7 +438,7 @@ public:
         int depth,
         MtpDataPacket& packet)
     {
-        std::cout << __PRETTY_FUNCTION__ << std::endl;
+        VLOG(2) << __PRETTY_FUNCTION__;
         return MTP_RESPONSE_OPERATION_NOT_SUPPORTED;
     }
 
@@ -438,7 +446,7 @@ public:
         MtpObjectHandle handle,
         MtpObjectInfo& info)
     {
-        std::cout << __PRETTY_FUNCTION__ << std::endl;
+        VLOG(2) << __PRETTY_FUNCTION__;
 
         info.mHandle = handle;
         info.mStorageID = db.at(handle).storage_id;
@@ -457,6 +465,9 @@ public:
         info.mDateModified = 0;
         info.mKeywords = ::strdup("ubuntu,touch");
         
+        if (VLOG_IS_ON(2))
+            info.print();
+
         return MTP_RESPONSE_OK;
     }
 
@@ -478,7 +489,7 @@ public:
     {
         DbEntry entry = db.at(handle);
 
-        std::cout << __PRETTY_FUNCTION__ << std::endl;
+        VLOG(1) << __PRETTY_FUNCTION__ << " handle: " << handle;
 
         outFilePath = std::string(entry.path);
         outFileLength = entry.object_size;
@@ -505,6 +516,7 @@ public:
                 if (db.at(i).parent == handle)
                     db.erase(i);
             }
+
             return MTP_RESPONSE_OK;
         }
         else
@@ -513,7 +525,8 @@ public:
 
     virtual MtpResponseCode moveFile(MtpObjectHandle handle, MtpObjectHandle new_parent)
     {
-        std::cout << __PRETTY_FUNCTION__ << std::endl;
+        VLOG(1) << __PRETTY_FUNCTION__ << " handle: " << handle
+                << " new parent: " << new_parent;
 
         // change parent
         db.at(handle).parent = new_parent;
@@ -524,7 +537,7 @@ public:
     /*
     virtual MtpResponseCode copyFile(MtpObjectHandle handle, MtpObjectHandle new_parent)
     {
-        std::cout << __PRETTY_FUNCTION__ << std::endl;
+        VLOG(2) << __PRETTY_FUNCTION__;
 
         // duplicate DbEntry
         // change parent
@@ -535,7 +548,7 @@ public:
 
     virtual MtpObjectHandleList* getObjectReferences(MtpObjectHandle handle)
     {
-        std::cout << __PRETTY_FUNCTION__ << std::endl;
+        VLOG(1) << __PRETTY_FUNCTION__;
         return nullptr;
     }
 
@@ -543,7 +556,7 @@ public:
         MtpObjectHandle handle,
         MtpObjectHandleList* references)
     {
-        std::cout << __PRETTY_FUNCTION__ << std::endl;
+        VLOG(1) << __PRETTY_FUNCTION__;
         return MTP_RESPONSE_OPERATION_NOT_SUPPORTED;    
     }
 
@@ -551,7 +564,8 @@ public:
         MtpObjectProperty property,
         MtpObjectFormat format)
     {
-        std::cout << __PRETTY_FUNCTION__ << std::endl;
+        VLOG(1) << __PRETTY_FUNCTION__ << MtpDebug::getObjectPropCodeName(property);
+
         MtpProperty* result = nullptr;
         switch(property)
         {

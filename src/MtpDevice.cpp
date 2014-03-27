@@ -38,6 +38,7 @@
 #include <unistd.h>
 
 #include <usbhost/usbhost.h>
+#include <glog/logging.h>
 
 namespace android {
 
@@ -56,7 +57,7 @@ static bool isMtpDevice(uint16_t vendor, uint16_t product) {
 MtpDevice* MtpDevice::open(const char* deviceName, int fd) {
     struct usb_device *device = usb_device_new(deviceName, fd);
     if (!device) {
-        ALOGE("usb_device_new failed for %s", deviceName);
+        LOG(ERROR) << "usb_device_new failed for " << deviceName;
         return NULL;
     }
 
@@ -75,7 +76,7 @@ MtpDevice* MtpDevice::open(const char* deviceName, int fd) {
             {
                 char* manufacturerName = usb_device_get_manufacturer_name(device);
                 char* productName = usb_device_get_product_name(device);
-                ALOGD("Found camera: \"%s\" \"%s\"\n", manufacturerName, productName);
+                VLOG(2) << "Found camera: \"" << manufacturerName << " \"" << productName << "\"";
                 free(manufacturerName);
                 free(productName);
             } else if (interface->bInterfaceClass == 0xFF &&
@@ -93,7 +94,7 @@ MtpDevice* MtpDevice::open(const char* deviceName, int fd) {
                 // Looks like an android style MTP device
                 char* manufacturerName = usb_device_get_manufacturer_name(device);
                 char* productName = usb_device_get_product_name(device);
-                ALOGD("Found MTP device: \"%s\" \"%s\"\n", manufacturerName, productName);
+                VLOG(2) << "Found MTP device: \"" << manufacturerName << "\" \"" << productName << "\"";
                 free(manufacturerName);
                 free(productName);
             }
@@ -137,7 +138,7 @@ MtpDevice* MtpDevice::open(const char* deviceName, int fd) {
             for (int i = 0; i < 3; i++) {
                 ep = (struct usb_endpoint_descriptor *)usb_descriptor_iter_next(&iter);
                 if (!ep || ep->bDescriptorType != USB_DT_ENDPOINT) {
-                    ALOGE("endpoints not found\n");
+                    LOG(ERROR) << "endpoints not found";
                     usb_device_close(device);
                     return NULL;
                 }
@@ -152,13 +153,13 @@ MtpDevice* MtpDevice::open(const char* deviceName, int fd) {
                 }
             }
             if (!ep_in_desc || !ep_out_desc || !ep_intr_desc) {
-                ALOGE("endpoints not found\n");
+                LOG(ERROR) << "endpoints not found";
                 usb_device_close(device);
                 return NULL;
             }
 
             if (usb_device_claim_interface(device, interface->bInterfaceNumber)) {
-                ALOGE("usb_device_claim_interface failed errno: %d\n", errno);
+                PLOG(ERROR) << "usb_device_claim_interface failed";
                 usb_device_close(device);
                 return NULL;
             }
@@ -171,7 +172,7 @@ MtpDevice* MtpDevice::open(const char* deviceName, int fd) {
     }
 
     usb_device_close(device);
-    ALOGE("device not found");
+    LOG(ERROR) << "device not found";
     return NULL;
 }
 
@@ -235,7 +236,7 @@ void MtpDevice::print() {
         mDeviceInfo->print();
 
         if (mDeviceInfo->mDeviceProperties) {
-            ALOGI("***** DEVICE PROPERTIES *****\n");
+            VLOG(2) << "***** DEVICE PROPERTIES *****";
             int count = mDeviceInfo->mDeviceProperties->size();
             for (int i = 0; i < count; i++) {
                 MtpDeviceProperty propCode = (*mDeviceInfo->mDeviceProperties)[i];
@@ -249,11 +250,11 @@ void MtpDevice::print() {
     }
 
     if (mDeviceInfo->mPlaybackFormats) {
-            ALOGI("***** OBJECT PROPERTIES *****\n");
+            VLOG(2) << "***** OBJECT PROPERTIES *****";
         int count = mDeviceInfo->mPlaybackFormats->size();
         for (int i = 0; i < count; i++) {
             MtpObjectFormat format = (*mDeviceInfo->mPlaybackFormats)[i];
-            ALOGI("*** FORMAT: %s\n", MtpDebug::getFormatCodeName(format));
+            VLOG(2) << "*** FORMAT: " << MtpDebug::getFormatCodeName(format);
             MtpObjectPropertyList* props = getObjectPropsSupported(format);
             if (props) {
                 for (int j = 0; j < props->size(); j++) {
@@ -263,8 +264,8 @@ void MtpDevice::print() {
                         property->print();
                         delete property;
                     } else {
-                        ALOGE("could not fetch property: %s",
-                                MtpDebug::getObjectPropCodeName(prop));
+                        LOG(ERROR) << "could not fetch property: "
+                                   << MtpDebug::getObjectPropCodeName(prop);
                     }
                 }
             }
@@ -587,8 +588,8 @@ bool MtpDevice::readObject(MtpObjectHandle handle,
             && mData.readDataHeader(mRequestIn1)) {
         uint32_t length = mData.getContainerLength();
         if (length - MTP_CONTAINER_HEADER_SIZE != objectSize) {
-            ALOGE("readObject error objectSize: %d, length: %d",
-                    objectSize, length);
+            LOG(ERROR) << "readObject error objectSize: " << objectSize
+                       << " length: " << length;
             goto fail;
         }
         length -= MTP_CONTAINER_HEADER_SIZE;
@@ -620,7 +621,7 @@ bool MtpDevice::readObject(MtpObjectHandle handle,
                 // queue up a read request
                 req->buffer_length = (remaining > sizeof(buffer1) ? sizeof(buffer1) : remaining);
                 if (mData.readDataAsync(req)) {
-                    ALOGE("readDataAsync failed");
+                    LOG(ERROR) << "readDataAsync failed";
                     goto fail;
                 }
             } else {
@@ -630,7 +631,7 @@ bool MtpDevice::readObject(MtpObjectHandle handle,
             if (writeBuffer) {
                 // write previous buffer
                 if (!callback(writeBuffer, offset, writeLength, clientData)) {
-                    ALOGE("write failed");
+                    LOG(ERROR) << "write failed";
                     // wait for pending read before failing
                     if (req)
                         mData.readDataWait(mDevice);
@@ -669,10 +670,10 @@ fail:
 
 // reads the object's data and writes it to the specified file path
 bool MtpDevice::readObject(MtpObjectHandle handle, const char* destPath, int group, int perm) {
-    ALOGD("readObject: %s", destPath);
+    VLOG(2) << "readObject: " << destPath;
     int fd = ::open(destPath, O_RDWR | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
     if (fd < 0) {
-        ALOGE("open failed for %s", destPath);
+        LOG(ERROR) << "open failed for " << destPath;
         return false;
     }
 
@@ -721,7 +722,7 @@ bool MtpDevice::readObject(MtpObjectHandle handle, const char* destPath, int gro
                 // queue up a read request
                 req->buffer_length = (remaining > sizeof(buffer1) ? sizeof(buffer1) : remaining);
                 if (mData.readDataAsync(req)) {
-                    ALOGE("readDataAsync failed");
+                    LOG(ERROR) << "readDataAsync failed";
                     goto fail;
                 }
             } else {
@@ -731,7 +732,7 @@ bool MtpDevice::readObject(MtpObjectHandle handle, const char* destPath, int gro
             if (writeBuffer) {
                 // write previous buffer
                 if (write(fd, writeBuffer, writeLength) != writeLength) {
-                    ALOGE("write failed");
+                    LOG(ERROR) << "write failed";
                     // wait for pending read before failing
                     if (req)
                         mData.readDataWait(mDevice);
@@ -768,7 +769,7 @@ fail:
 }
 
 bool MtpDevice::sendRequest(MtpOperationCode operation) {
-    ALOGV("sendRequest: %s\n", MtpDebug::getOperationCodeName(operation));
+    VLOG(2) << "sendRequest: " << MtpDebug::getOperationCodeName(operation);
     mReceivedResponse = false;
     mRequest.setOperationCode(operation);
     if (mTransactionID > 0)
@@ -779,7 +780,7 @@ bool MtpDevice::sendRequest(MtpOperationCode operation) {
 }
 
 bool MtpDevice::sendData() {
-    ALOGV("sendData\n");
+    VLOG(2) << "sendData";
     mData.setOperationCode(mRequest.getOperationCode());
     mData.setTransactionID(mRequest.getTransactionID());
     int ret = mData.write(mRequestOut);
@@ -790,10 +791,10 @@ bool MtpDevice::sendData() {
 bool MtpDevice::readData() {
     mData.reset();
     int ret = mData.read(mRequestIn1);
-    ALOGV("readData returned %d\n", ret);
+    VLOG(2) << "readData returned " << ret;
     if (ret >= MTP_CONTAINER_HEADER_SIZE) {
         if (mData.getContainerType() == MTP_CONTAINER_TYPE_RESPONSE) {
-            ALOGD("got response packet instead of data packet");
+            VLOG(2) << "got response packet instead of data packet";
             // we got a response packet rather than data
             // copy it to mResponse
             mResponse.copyFrom(mData);
@@ -804,7 +805,7 @@ bool MtpDevice::readData() {
         return true;
     }
     else {
-        ALOGV("readResponse failed\n");
+        VLOG(2) << "readResponse failed";
         return false;
     }
 }
@@ -816,7 +817,7 @@ bool MtpDevice::writeDataHeader(MtpOperationCode operation, int dataLength) {
 }
 
 MtpResponseCode MtpDevice::readResponse() {
-    ALOGV("readResponse\n");
+    VLOG(2) << "readResponse";
     if (mReceivedResponse) {
         mReceivedResponse = false;
         return mResponse.getResponseCode();
@@ -830,7 +831,7 @@ MtpResponseCode MtpDevice::readResponse() {
         mResponse.dump();
         return mResponse.getResponseCode();
     } else {
-        ALOGD("readResponse failed\n");
+        VLOG(2) << "readResponse failed";
         return -1;
     }
 }

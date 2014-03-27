@@ -25,6 +25,7 @@
 #include <cstring>
 
 #include <usbhost/usbhost.h>
+#include <glog/logging.h>
 
 namespace android {
 
@@ -36,8 +37,7 @@ MtpPacket::MtpPacket(int bufferSize)
 {
     mBuffer = (uint8_t *)malloc(bufferSize);
     if (!mBuffer) {
-        ALOGE("out of memory!");
-        abort();
+        LOG(FATAL) << "out of memory!";
     }
 }
 
@@ -57,8 +57,7 @@ void MtpPacket::allocate(int length) {
         int newLength = length + mAllocationIncrement;
         mBuffer = (uint8_t *)realloc(mBuffer, newLength);
         if (!mBuffer) {
-            ALOGE("out of memory!");
-            abort();
+            LOG(FATAL) << "out of memory!";
         }
         mBufferSize = newLength;
     }
@@ -73,15 +72,14 @@ void MtpPacket::dump() {
         sprintf(bufptr, "%02X ", mBuffer[i]);
         bufptr += strlen(bufptr);
         if (i % DUMP_BYTES_PER_ROW == (DUMP_BYTES_PER_ROW - 1)) {
-            ALOGV("%s", buffer);
+            VLOG(3) << buffer;
             bufptr = buffer;
         }
     }
     if (bufptr != buffer) {
         // print last line
-        ALOGV("%s", buffer);
+        VLOG(3) << buffer;
     }
-    ALOGV("\n");
 }
 
 void MtpPacket::copyFrom(const MtpPacket& src) {
@@ -134,7 +132,7 @@ void MtpPacket::setTransactionID(MtpTransactionID id) {
 
 uint32_t MtpPacket::getParameter(int index) const {
     if (index < 1 || index > 5) {
-        ALOGE("index %d out of range in MtpPacket::getParameter", index);
+        LOG(ERROR) << "index " << index << " out of range in MtpPacket::getParameter";
         return 0;
     }
     return getUInt32(MTP_CONTAINER_PARAMETER_OFFSET + (index - 1) * sizeof(uint32_t));
@@ -142,7 +140,7 @@ uint32_t MtpPacket::getParameter(int index) const {
 
 void MtpPacket::setParameter(int index, uint32_t value) {
     if (index < 1 || index > 5) {
-        ALOGE("index %d out of range in MtpPacket::setParameter", index);
+        LOG(ERROR) << "index " << index << " out of range in MtpPacket::setParameter";
         return;
     }
     int offset = MTP_CONTAINER_PARAMETER_OFFSET + (index - 1) * sizeof(uint32_t);

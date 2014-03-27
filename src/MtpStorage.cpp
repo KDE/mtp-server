@@ -30,6 +30,8 @@
 #include <stdio.h>
 #include <limits.h>
 
+#include <glog/logging.h>
+
 namespace android {
 
 MtpStorage::MtpStorage(MtpStorageID id, const char* filePath,
@@ -43,7 +45,7 @@ MtpStorage::MtpStorage(MtpStorageID id, const char* filePath,
         mReserveSpace(reserveSpace),
         mRemovable(removable)
 {
-    ALOGV("MtpStorage id: %d path: %s\n", id, filePath);
+    VLOG(2) << "MtpStorage id: " << id << " path: " << filePath;
 }
 
 MtpStorage::~MtpStorage() {

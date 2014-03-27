@@ -16,12 +16,15 @@
 
 #define LOG_TAG "MtpStorageInfo"
 
+#include <iomanip>
 #include <cstring>
 
 #include "MtpDebug.h"
 #include "MtpDataPacket.h"
 #include "MtpStorageInfo.h"
 #include "MtpStringBuffer.h"
+
+#include <glog/logging.h>
 
 namespace android {
 
@@ -63,12 +66,15 @@ void MtpStorageInfo::read(MtpDataPacket& packet) {
 }
 
 void MtpStorageInfo::print() {
-    ALOGD("Storage Info %08X:\n\tmStorageType: %d\n\tmFileSystemType: %d\n\tmAccessCapability: %d\n",
-            mStorageID, mStorageType, mFileSystemType, mAccessCapability);
-    ALOGD("\tmMaxCapacity: %lld\n\tmFreeSpaceBytes: %lld\n\tmFreeSpaceObjects: %d\n",
-            mMaxCapacity, mFreeSpaceBytes, mFreeSpaceObjects);
-    ALOGD("\tmStorageDescription: %s\n\tmVolumeIdentifier: %s\n",
-            mStorageDescription, mVolumeIdentifier);
+    VLOG(2) << "Storage Info " << std::hex << mStorageID << std::dec << ":"
+            << "\n\tmStorageType: " << mStorageType
+            << "\n\tmFileSystemType: " << mFileSystemType
+            << "\n\tmAccessCapability: " << mAccessCapability;
+    VLOG(2) << "\tmMaxCapacity: " << mMaxCapacity
+            << "\n\tmFreeSpaceBytes: " << mFreeSpaceBytes
+            << "\n\tmFreeSpaceObjects: " << mFreeSpaceObjects;
+    VLOG(2) << "\tmStorageDescription: " << mStorageDescription
+            << "\n\tmVolumeIdentifier: " << mVolumeIdentifier;
 }
 
 }  // namespace android

@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <iomanip>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -40,6 +41,8 @@
 #include <linux/usb/f_mtp.h>
 
 #include <hybris/properties/properties.h>
+
+#include <glog/logging.h>
 
 namespace android {
 
@@ -158,12 +161,12 @@ bool MtpServer::hasStorage(MtpStorageID id) {
 void MtpServer::run() {
     int fd = mFD;
 
-    ALOGV("MtpServer::run fd: %d\n", fd);
+    VLOG(1) << "MtpServer::run fd: " << fd;
 
     while (1) {
         int ret = mRequest.read(fd);
         if (ret < 0) {
-            ALOGV("request read returned %d, errno: %d", ret, errno);
+            PLOG(ERROR) << "request read returned " << ret;
             if (errno == ECANCELED) {
                 // return to top of loop and wait for next command
                 continue;
@@ -173,7 +176,7 @@ void MtpServer::run() {
         MtpOperationCode operation = mRequest.getOperationCode();
         MtpTransactionID transaction = mRequest.getTransactionID();
 
-        ALOGV("operation: %s", MtpDebug::getOperationCodeName(operation));
+        VLOG(2) << "operation: " << MtpDebug::getOperationCodeName(operation);
         mRequest.dump();
 
         // FIXME need to generalize this
@@ -184,14 +187,14 @@ void MtpServer::run() {
         if (dataIn) {
             int ret = mData.read(fd);
             if (ret < 0) {
-                ALOGE("data read returned %d, errno: %d", ret, errno);
+                PLOG(ERROR) << "data read returned " << ret;
                 if (errno == ECANCELED) {
                     // return to top of loop and wait for next command
                     continue;
                 }
                 break;
             }
-            ALOGV("received data:");
+            VLOG(2) << "received data:";
             mData.dump();
         } else {
             mData.reset();
@@ -201,11 +204,11 @@ void MtpServer::run() {
             if (!dataIn && mData.hasData()) {
                 mData.setOperationCode(operation);
                 mData.setTransactionID(transaction);
-                ALOGV("sending data:");
+                VLOG(2) << "sending data:";
                 mData.dump();
                 ret = mData.write(fd);
                 if (ret < 0) {
-                    ALOGE("request write returned %d, errno: %d", ret, errno);
+                    PLOG(ERROR) << "request write returned " << ret;
                     if (errno == ECANCELED) {
                         // return to top of loop and wait for next command
                         continue;
@@ -215,11 +218,12 @@ void MtpServer::run() {
             }
 
             mResponse.setTransactionID(transaction);
-            ALOGV("sending response %04X", mResponse.getResponseCode());
+            VLOG(2) << "sending response "
+                    << std::hex << mResponse.getResponseCode() << std::dec;
             ret = mResponse.write(fd);
             mResponse.dump();
             if (ret < 0) {
-                ALOGE("request write returned %d, errno: %d", ret, errno);
+                PLOG(ERROR) << "request write returned " << ret;
                 if (errno == ECANCELED) {
                     // return to top of loop and wait for next command
                     continue;
@@ -227,7 +231,7 @@ void MtpServer::run() {
                 break;
             }
         } else {
-            ALOGV("skipping response\n");
+            VLOG(2) << "skipping response";
         }
     }
 
@@ -247,33 +251,33 @@ void MtpServer::run() {
 }
 
 void MtpServer::sendObjectAdded(MtpObjectHandle handle) {
-    ALOGV("sendObjectAdded %d\n", handle);
+    VLOG(1) << "sendObjectAdded " << handle;
     sendEvent(MTP_EVENT_OBJECT_ADDED, handle, 0, 0);
 }
 
 void MtpServer::sendObjectRemoved(MtpObjectHandle handle) {
-    ALOGV("sendObjectRemoved %d\n", handle);
+    VLOG(1) << "sendObjectRemoved " << handle;
     sendEvent(MTP_EVENT_OBJECT_REMOVED, handle, 0, 0);
 }
 
 void MtpServer::sendObjectInfoChanged(MtpObjectHandle handle) {
-    ALOGV("sendObjectInfoChanged %d\n", handle);
+    VLOG(1) << "sendObjectInfoChanged " << handle;
     sendEvent(MTP_EVENT_OBJECT_INFO_CHANGED, handle, 0, 0);
 }
 
 void MtpServer::sendObjectPropChanged(MtpObjectHandle handle,
                                       MtpObjectProperty prop) {
-    ALOGV("sendObjectPropChanged %d %d\n", handle, prop);
+    VLOG(1) << "sendObjectPropChanged " << handle << " " << prop;
     sendEvent(MTP_EVENT_OBJECT_PROP_CHANGED, handle, prop, 0);
 }
 
 void MtpServer::sendStoreAdded(MtpStorageID id) {
-    ALOGV("sendStoreAdded %08X\n", id);
+    VLOG(1) << "sendStoreAdded " << std::hex << id << std::dec;
     sendEvent(MTP_EVENT_STORE_ADDED, id, 0, 0);
 }
 
 void MtpServer::sendStoreRemoved(MtpStorageID id) {
-    ALOGV("sendStoreRemoved %08X\n", id);
+    VLOG(1) << "sendStoreRemoved " << std::hex << id << std::dec;
     sendEvent(MTP_EVENT_STORE_REMOVED, id, 0, 0);
 }
 
@@ -288,7 +292,7 @@ void MtpServer::sendEvent(MtpEventCode code,
         mEvent.setParameter(2, param2);
         mEvent.setParameter(3, param3);
         int ret = mEvent.write(mFD);
-        ALOGV("mEvent.write returned %d\n", ret);
+        VLOG(2) << "mEvent.write returned " << ret;
     }
 }
 
@@ -317,7 +321,7 @@ void MtpServer::removeEditObject(MtpObjectHandle handle) {
             return;
         }
     }
-    ALOGE("ObjectEdit not found in removeEditObject");
+    LOG(ERROR) << "ObjectEdit not found in removeEditObject";
 }
 
 void MtpServer::commitEdit(ObjectEdit* edit) {
@@ -335,7 +339,7 @@ bool MtpServer::handleRequest() {
 
     if (mSendObjectHandle != kInvalidObjectHandle && operation != MTP_OPERATION_SEND_OBJECT) {
         // FIXME - need to delete mSendObjectHandle from the database
-        ALOGE("expected SendObject after SendObjectInfo");
+        LOG(ERROR) << "expected SendObject after SendObjectInfo";
         mSendObjectHandle = kInvalidObjectHandle;
     }
 
@@ -432,7 +436,7 @@ bool MtpServer::handleRequest() {
             response = doEndEditObject();
             break;
         default:
-            ALOGE("got unsupported command %s", MtpDebug::getOperationCodeName(operation));
+            LOG(ERROR) << "got unsupported command " << MtpDebug::getOperationCodeName(operation);
             response = MTP_RESPONSE_OPERATION_NOT_SUPPORTED;
             break;
     }
@@ -444,7 +448,7 @@ bool MtpServer::handleRequest() {
 }
 
 MtpResponseCode MtpServer::doGetDeviceInfo() {
-    ALOGV("%s", __PRETTY_FUNCTION__);
+    VLOG(1) <<  __PRETTY_FUNCTION__;
     MtpStringBuffer   string;
     char prop_value[PROP_VALUE_MAX];
 
@@ -639,8 +643,8 @@ MtpResponseCode MtpServer::doGetObjectPropValue() {
         return MTP_RESPONSE_INVALID_OBJECT_HANDLE;
     MtpObjectHandle handle = mRequest.getParameter(1);
     MtpObjectProperty property = mRequest.getParameter(2);
-    ALOGV("GetObjectPropValue %d %s\n", handle,
-            MtpDebug::getObjectPropCodeName(property));
+    VLOG(2) << "GetObjectPropValue " << handle
+            << " " << MtpDebug::getObjectPropCodeName(property);
 
     return mDatabase->getObjectPropertyValue(handle, property, mData);
 }
@@ -652,8 +656,8 @@ MtpResponseCode MtpServer::doSetObjectPropValue() {
         return MTP_RESPONSE_INVALID_OBJECT_HANDLE;
     MtpObjectHandle handle = mRequest.getParameter(1);
     MtpObjectProperty property = mRequest.getParameter(2);
-    ALOGV("SetObjectPropValue %d %s\n", handle,
-            MtpDebug::getObjectPropCodeName(property));
+    VLOG(2) << "SetObjectPropValue " << handle
+            << " " << MtpDebug::getObjectPropCodeName(property);
 
     response = mDatabase->setObjectPropertyValue(handle, property, mData);
 
@@ -664,24 +668,21 @@ MtpResponseCode MtpServer::doSetObjectPropValue() {
 
 MtpResponseCode MtpServer::doGetDevicePropValue() {
     MtpDeviceProperty property = mRequest.getParameter(1);
-    ALOGV("GetDevicePropValue %s\n",
-            MtpDebug::getDevicePropCodeName(property));
+    VLOG(1) << "GetDevicePropValue " << MtpDebug::getDevicePropCodeName(property);
 
     return mDatabase->getDevicePropertyValue(property, mData);
 }
 
 MtpResponseCode MtpServer::doSetDevicePropValue() {
     MtpDeviceProperty property = mRequest.getParameter(1);
-    ALOGV("SetDevicePropValue %s\n",
-            MtpDebug::getDevicePropCodeName(property));
+    VLOG(1) << "SetDevicePropValue " << MtpDebug::getDevicePropCodeName(property);
 
     return mDatabase->setDevicePropertyValue(property, mData);
 }
 
 MtpResponseCode MtpServer::doResetDevicePropValue() {
     MtpDeviceProperty property = mRequest.getParameter(1);
-    ALOGV("ResetDevicePropValue %s\n",
-            MtpDebug::getDevicePropCodeName(property));
+    VLOG(1) << "ResetDevicePropValue " << MtpDebug::getDevicePropCodeName(property);
 
     return mDatabase->resetDeviceProperty(property);
 }
@@ -696,9 +697,11 @@ MtpResponseCode MtpServer::doGetObjectPropList() {
     uint32_t property = mRequest.getParameter(3);
     int groupCode = mRequest.getParameter(4);
     int depth = mRequest.getParameter(5);
-   ALOGV("GetObjectPropList %d format: %s property: %s group: %d depth: %d\n",
-            handle, MtpDebug::getFormatCodeName(format),
-            MtpDebug::getObjectPropCodeName(property), groupCode, depth);
+    VLOG(2) << "GetObjectPropList " << handle
+            << " format: " << MtpDebug::getFormatCodeName(format)
+            << " property: " << MtpDebug::getObjectPropCodeName(property)
+            << " group: " << groupCode
+            << " depth: " << depth;
 
     return mDatabase->getObjectPropertyList(handle, format, property, groupCode, depth, mData);
 }
@@ -766,7 +769,7 @@ MtpResponseCode MtpServer::doGetObject() {
 
     // then transfer the file
     int ret = ioctl(mFD, MTP_SEND_FILE_WITH_HEADER, (unsigned long)&mfr);
-    ALOGV("MTP_SEND_FILE_WITH_HEADER returned %d\n", ret);
+    VLOG(2) << "MTP_SEND_FILE_WITH_HEADER returned " << ret;
     close(mfr.fd);
     if (ret < 0) {
         if (errno == ECANCELED)
@@ -831,7 +834,7 @@ MtpResponseCode MtpServer::doGetPartialObject(MtpOperationCode operation) {
 
     // transfer the file
     int ret = ioctl(mFD, MTP_SEND_FILE_WITH_HEADER, (unsigned long)&mfr);
-    ALOGV("MTP_SEND_FILE_WITH_HEADER returned %d\n", ret);
+    VLOG(2) << "MTP_SEND_FILE_WITH_HEADER returned " << ret;
     close(mfr.fd);
     if (ret < 0) {
         if (errno == ECANCELED)
@@ -886,7 +889,8 @@ MtpResponseCode MtpServer::doSendObjectInfo() {
     mData.getString(modified);     // date modified
     // keywords follow
 
-    ALOGV("name: %s format: %04X\n", (const char *)name, format);
+    VLOG(2) << "name: " << (const char *) name
+            << " format: " << std::hex << format << std::dec;
     time_t modifiedTime;
     if (!parseDateTime(modified, modifiedTime))
         modifiedTime = 0;
@@ -907,7 +911,8 @@ MtpResponseCode MtpServer::doSendObjectInfo() {
             return MTP_RESPONSE_OBJECT_TOO_LARGE;
     }
 
-    ALOGD("path: %s parent: %d storageID: %08X", path.c_str(), parent, storageID);
+    VLOG(2) << "path: " << path.c_str() << " parent: " << parent
+            << " storageID: " << std::hex << storageID << std::dec;
     MtpObjectHandle handle = mDatabase->beginSendObject(path.c_str(),
             format, parent, storageID, mSendObjectFileSize, modifiedTime);
     if (handle == kInvalidObjectHandle) {
@@ -946,7 +951,7 @@ MtpResponseCode MtpServer::doSendObject() {
     int ret, initialData;
 
     if (mSendObjectHandle == kInvalidObjectHandle) {
-        ALOGE("Expected SendObjectInfo before SendObject");
+        LOG(ERROR) << "Expected SendObjectInfo before SendObject";
         result = MTP_RESPONSE_NO_VALID_OBJECT_INFO;
         goto done;
     }
@@ -983,10 +988,10 @@ MtpResponseCode MtpServer::doSendObject() {
             mfr.length = mSendObjectFileSize - initialData;
         }
 
-        ALOGV("receiving %s\n", mSendObjectFilePath.c_str());
+        VLOG(2) << "receiving " << mSendObjectFilePath.c_str();
         // transfer the file
         ret = ioctl(mFD, MTP_RECEIVE_FILE, (unsigned long)&mfr);
-        ALOGV("MTP_RECEIVE_FILE returned %d\n", ret);
+        VLOG(2) << "MTP_RECEIVE_FILE returned " << ret;
     }
     close(mfr.fd);
 
@@ -1013,7 +1018,7 @@ static void deleteRecursive(const char* path) {
     char pathbuf[PATH_MAX];
     int pathLength = strlen(path);
     if (pathLength >= sizeof(pathbuf) - 1) {
-        ALOGE("path too long: %s\n", path);
+        LOG(ERROR) << "path too long: " << path;
     }
     strcpy(pathbuf, path);
     if (pathbuf[pathLength - 1] != '/') {
@@ -1024,7 +1029,7 @@ static void deleteRecursive(const char* path) {
 
     DIR* dir = opendir(path);
     if (!dir) {
-        ALOGE("opendir %s failed: %s", path, strerror(errno));
+        PLOG(ERROR) << "opendir " << path << " failed";
         return;
     }
 
@@ -1039,7 +1044,7 @@ static void deleteRecursive(const char* path) {
 
         int nameLength = strlen(name);
         if (nameLength > pathRemaining) {
-            ALOGE("path %s/%s too long\n", path, name);
+            LOG(ERROR) << "path " << path << "/" << name << " too long";
             continue;
         }
         strcpy(fileSpot, name);
@@ -1065,7 +1070,7 @@ static void deletePath(const char* path) {
             unlink(path);
         }
     } else {
-        ALOGE("deletePath stat failed for %s: %s", path, strerror(errno));
+        PLOG(ERROR) << "deletePath stat failed for " << path;
     }
 }
 
@@ -1081,7 +1086,7 @@ MtpResponseCode MtpServer::doDeleteObject() {
     int64_t fileLength;
     int result = mDatabase->getObjectFilePath(handle, filePath, fileLength, format);
     if (result == MTP_RESPONSE_OK) {
-        ALOGV("deleting %s", filePath.c_str());
+        VLOG(2) << "deleting " << filePath.c_str();
         result = mDatabase->deleteFile(handle);
         // Don't delete the actual files unless the database deletion is allowed
         if (result == MTP_RESPONSE_OK) {
@@ -1105,7 +1110,7 @@ MtpResponseCode MtpServer::doMoveObject() {
     int result = mDatabase->getObjectFilePath(handle, filePath, fileLength, format);
     result = mDatabase->getObjectFilePath(handle, newPath, fileLength, format);
     if (result == MTP_RESPONSE_OK) {
-        ALOGV("moving %s to %s", filePath.c_str(), newPath.c_str());
+        VLOG(2) << "moving " << filePath.c_str() << " to " << newPath.c_str();
         result = mDatabase->moveFile(handle, newparent);
         // Don't move the actual files unless the database deletion is allowed
         if (result == MTP_RESPONSE_OK) {
@@ -1119,8 +1124,8 @@ MtpResponseCode MtpServer::doMoveObject() {
 MtpResponseCode MtpServer::doGetObjectPropDesc() {
     MtpObjectProperty propCode = mRequest.getParameter(1);
     MtpObjectFormat format = mRequest.getParameter(2);
-    ALOGV("GetObjectPropDesc %s %s\n", MtpDebug::getObjectPropCodeName(propCode),
-                                        MtpDebug::getFormatCodeName(format));
+    VLOG(2) << "GetObjectPropDesc " << MtpDebug::getObjectPropCodeName(propCode)
+            << " " << MtpDebug::getFormatCodeName(format);
     MtpProperty* property = mDatabase->getObjectPropertyDesc(propCode, format);
     if (!property)
         return MTP_RESPONSE_OBJECT_PROP_NOT_SUPPORTED;
@@ -1131,7 +1136,7 @@ MtpResponseCode MtpServer::doGetObjectPropDesc() {
 
 MtpResponseCode MtpServer::doGetDevicePropDesc() {
     MtpDeviceProperty propCode = mRequest.getParameter(1);
-    ALOGV("GetDevicePropDesc %s\n", MtpDebug::getDevicePropCodeName(propCode));
+    VLOG(1) << "GetDevicePropDesc " << MtpDebug::getDevicePropCodeName(propCode);
     MtpProperty* property = mDatabase->getDevicePropertyDesc(propCode);
     if (!property)
         return MTP_RESPONSE_DEVICE_PROP_NOT_SUPPORTED;
@@ -1151,18 +1156,20 @@ MtpResponseCode MtpServer::doSendPartialObject() {
 
     ObjectEdit* edit = getEditObject(handle);
     if (!edit) {
-        ALOGE("object not open for edit in doSendPartialObject");
+        LOG(ERROR) << "object not open for edit in doSendPartialObject";
         return MTP_RESPONSE_GENERAL_ERROR;
     }
 
     // can't start writing past the end of the file
     if (offset > edit->mSize) {
-        ALOGD("writing past end of object, offset: %lld, edit->mSize: %lld", offset, edit->mSize);
+        VLOG(2) << "writing past end of object, offset: " << offset
+                << " edit->mSize: " << edit->mSize;
         return MTP_RESPONSE_GENERAL_ERROR;
     }
 
     const char* filePath = edit->mPath.c_str();
-    ALOGV("receiving partial %s %lld %lld\n", filePath, offset, length);
+    VLOG(2) << "receiving partial " << filePath
+            << " " << offset << " " << length;
 
     // read the header, and possibly some data
     int ret = mData.read(mFD);
@@ -1184,7 +1191,7 @@ MtpResponseCode MtpServer::doSendPartialObject() {
 
         // transfer the file
         ret = ioctl(mFD, MTP_RECEIVE_FILE, (unsigned long)&mfr);
-        ALOGV("MTP_RECEIVE_FILE returned %d", ret);
+        VLOG(2) << "MTP_RECEIVE_FILE returned " << ret;
     }
     if (ret < 0) {
         mResponse.setParameter(1, 0);
@@ -1208,7 +1215,7 @@ MtpResponseCode MtpServer::doTruncateObject() {
     MtpObjectHandle handle = mRequest.getParameter(1);
     ObjectEdit* edit = getEditObject(handle);
     if (!edit) {
-        ALOGE("object not open for edit in doTruncateObject");
+        LOG(ERROR) << "object not open for edit in doTruncateObject";
         return MTP_RESPONSE_GENERAL_ERROR;
     }
 
@@ -1226,7 +1233,7 @@ MtpResponseCode MtpServer::doTruncateObject() {
 MtpResponseCode MtpServer::doBeginEditObject() {
     MtpObjectHandle handle = mRequest.getParameter(1);
     if (getEditObject(handle)) {
-        ALOGE("object already open for edit in doBeginEditObject");
+        LOG(ERROR) << "object already open for edit in doBeginEditObject";
         return MTP_RESPONSE_GENERAL_ERROR;
     }
 
@@ -1239,7 +1246,7 @@ MtpResponseCode MtpServer::doBeginEditObject() {
 
     int fd = open(path.c_str(), O_RDWR | O_EXCL);
     if (fd < 0) {
-        ALOGE("open failed for %s in doBeginEditObject (%d)", path.c_str(), errno);
+        PLOG(ERROR) << "open failed for " << path.c_str() << " in doBeginEditObject";
         return MTP_RESPONSE_GENERAL_ERROR;
     }
 
@@ -1251,7 +1258,7 @@ MtpResponseCode MtpServer::doEndEditObject() {
     MtpObjectHandle handle = mRequest.getParameter(1);
     ObjectEdit* edit = getEditObject(handle);
     if (!edit) {
-        ALOGE("object not open for edit in doEndEditObject");
+        LOG(ERROR) << "object not open for edit in doEndEditObject";
         return MTP_RESPONSE_GENERAL_ERROR;
     }
 
