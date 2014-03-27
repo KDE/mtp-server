@@ -2,6 +2,8 @@ mtp (0.0.3+14.04.20140326-0ubuntu1) UNRELEASED; urgency=medium
 
   * New release:
     - Do better logging; with logging levels for verbosity.
+    - Listen to inotify events to know about changes happening on the
+      filesystem but not initiated by the MTP protocol.
 
  -- Mathieu Trudel-Lapierre <mathieu-tl@ubuntu.com>  Thu, 27 Mar 2014 11:44:08 -0400
 

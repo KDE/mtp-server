@@ -511,7 +511,7 @@ MtpResponseCode MtpServer::doOpenSession() {
     mSessionID = mRequest.getParameter(1);
     mSessionOpen = true;
 
-    mDatabase->sessionStarted();
+    mDatabase->sessionStarted(this);
 
     return MTP_RESPONSE_OK;
 }

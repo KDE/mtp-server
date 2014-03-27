@@ -18,6 +18,7 @@
 #define _MTP_DATABASE_H
 
 #include "MtpTypes.h"
+#include "MtpServer.h"
 
 namespace android {
 
@@ -106,7 +107,7 @@ public:
 
     virtual MtpProperty*            getDevicePropertyDesc(MtpDeviceProperty property) = 0;
 
-    virtual void                    sessionStarted() = 0;
+    virtual void                    sessionStarted(MtpServer* server) = 0;
 
     virtual void                    sessionEnded() = 0;
 };
