@@ -209,10 +209,6 @@ private:
                                                 asio::placeholders::bytes_transferred));
     }
 
-    static void read_more_events(UbuntuMtpDatabase& db) {
-        db.read_more_notify();
-    }
-
     void inotify_handler(const boost::system::error_code&,
                         std::size_t transferred)
     {
