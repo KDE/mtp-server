@@ -5,10 +5,13 @@ Maintainer: Ubuntu Developers <ubuntu-devel-discuss@lists.ubuntu.com>
 XSBC-Original-Maintainer: Thomas Voß <thomas.voss@canonical.com>
 Build-Depends: debhelper (>= 9), 
                cmake, 
+               pkg-config,
                libboost-dev,
+               libboost-thread-dev,
                libboost-filesystem-dev,
                libboost-test-dev,
                libandroid-properties-dev,
+               libgoogle-glog-dev,
 Standards-Version: 3.9.4
 Homepage: http://launchpad.net/mtp
 # If you aren't ~phablet-team but need to upload packaging changes,

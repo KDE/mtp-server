@@ -353,7 +353,7 @@ public:
         return new MtpProperty(MTP_DEVICE_PROPERTY_UNDEFINED, MTP_TYPE_UNDEFINED);
     }
     
-    virtual void sessionStarted()
+    virtual void sessionStarted(MtpServer* server)
     {
         std::cout << __PRETTY_FUNCTION__ << std::endl;
     }

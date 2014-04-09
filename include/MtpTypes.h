@@ -25,12 +25,6 @@
 #include <thread>
 #include <vector>
 
-// TODO(tvoss): Find a more sensible approach here.
-#define ALOGD(log, ...) fprintf(stdout, log, ##__VA_ARGS__)
-#define ALOGI(log, ...) fprintf(stdout, log, ##__VA_ARGS__)
-#define ALOGE(log, ...) fprintf(stdout, log, ##__VA_ARGS__)
-#define ALOGV(log, ...) fprintf(stdout, log, ##__VA_ARGS__)
-
 namespace android {
 
 typedef int32_t int128_t[4];

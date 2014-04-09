@@ -22,7 +22,10 @@
 #include "MtpStringBuffer.h"
 #include "MtpUtils.h"
 
+#include <iomanip>
 #include <cstring>
+
+#include <glog/logging.h>
 
 namespace android {
 
@@ -93,18 +96,25 @@ void MtpObjectInfo::read(MtpDataPacket& packet) {
 }
 
 void MtpObjectInfo::print() {
-    ALOGD("MtpObject Info %08X: %s\n", mHandle, mName);
-    ALOGD("  mStorageID: %08X mFormat: %04X mProtectionStatus: %d\n",
-            mStorageID, mFormat, mProtectionStatus);
-    ALOGD("  mCompressedSize: %d mThumbFormat: %04X mThumbCompressedSize: %d\n",
-            mCompressedSize, mFormat, mThumbCompressedSize);
-    ALOGD("  mThumbPixWidth: %d mThumbPixHeight: %d\n", mThumbPixWidth, mThumbPixHeight);
-    ALOGD("  mImagePixWidth: %d mImagePixHeight: %d mImagePixDepth: %d\n",
-            mImagePixWidth, mImagePixHeight, mImagePixDepth);
-    ALOGD("  mParent: %08X mAssociationType: %04X mAssociationDesc: %04X\n",
-            mParent, mAssociationType, mAssociationDesc);
-    ALOGD("  mSequenceNumber: %d mDateCreated: %ld mDateModified: %ld mKeywords: %s\n",
-            mSequenceNumber, mDateCreated, mDateModified, mKeywords);
+    VLOG(2) << "MtpObject Info " << mHandle << ": " << mName;
+    VLOG(2) << "  mStorageID: " << std::hex <<  mStorageID
+            << " mFormat: " << mFormat << std::dec
+            << " mProtectionStatus: " << mProtectionStatus;
+    VLOG(2) << "  mCompressedSize: " << mCompressedSize
+            << " mThumbFormat: " << std::hex << mThumbFormat << std::dec
+            << " mThumbCompressedSize: " << mThumbCompressedSize;
+    VLOG(2) << "  mThumbPixWidth: " << mThumbPixWidth
+            << " mThumbPixHeight: " << mThumbPixHeight;
+    VLOG(2) << "  mImagePixWidth: " << mImagePixWidth
+            << " mImagePixHeight: " << mImagePixHeight
+            << " mImagePixDepth: " << mImagePixDepth;
+    VLOG(2) << "  mParent: " << std::hex << mParent
+            << " mAssociationType: " << mAssociationType << std::dec
+            << " mAssociationDesc: " << mAssociationDesc;
+    VLOG(2) << "  mSequenceNumber: " << mSequenceNumber
+            << " mDateCreated: " << mDateCreated
+            << " mDateModified: " << mDateModified
+            << " mKeywords: " << mKeywords;
 }
 
 }  // namespace android

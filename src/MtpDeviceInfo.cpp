@@ -23,6 +23,8 @@
 
 #include <cstring>
 
+#include <glog/logging.h>
+
 namespace android {
 
 MtpDeviceInfo::MtpDeviceInfo()
@@ -90,10 +92,16 @@ void MtpDeviceInfo::read(MtpDataPacket& packet) {
 }
 
 void MtpDeviceInfo::print() {
-    ALOGV("Device Info:\n\tmStandardVersion: %d\n\tmVendorExtensionID: %d\n\tmVendorExtensionVersiony: %d\n",
-            mStandardVersion, mVendorExtensionID, mVendorExtensionVersion);
-    ALOGV("\tmVendorExtensionDesc: %s\n\tmFunctionalCode: %d\n\tmManufacturer: %s\n\tmModel: %s\n\tmVersion: %s\n\tmSerial: %s\n",
-            mVendorExtensionDesc, mFunctionalCode, mManufacturer, mModel, mVersion, mSerial);
+    VLOG(2) << "Device Info:"
+            << "\n\tmStandardVersion: " << mStandardVersion
+            << "\n\tmVendorExtensionID: " << mVendorExtensionID
+            << "\n\tmVendorExtensionVersion: " << mVendorExtensionVersion
+            << "\n\tmVendorExtensionDesc: " << mVendorExtensionDesc
+            << "\n\tmFunctionalCode: " << mFunctionalCode
+            << "\n\tmManufacturer: " << mManufacturer
+            << "\n\tmModel: " << mModel
+            << "\n\tmVersion: " << mVersion
+            << "\n\tmSerial: " << mSerial;
 }
 
 }  // namespace android

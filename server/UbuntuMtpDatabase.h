@@ -24,6 +24,7 @@
 #include <MtpStringBuffer.h>
 #include <MtpObjectInfo.h>
 #include <MtpProperty.h>
+#include <MtpDebug.h>
 
 #include <cstdlib>
 #include <cstring>
@@ -33,7 +34,11 @@
 #include <string>
 #include <tuple>
 #include <exception>
+#include <sys/inotify.h>
 
+#include <boost/thread.hpp>
+#include <boost/asio.hpp>
+#include <boost/bind.hpp>
 #include <boost/algorithm/string.hpp>
 #include <boost/assign/list_of.hpp>
 #include <boost/foreach.hpp>
@@ -41,6 +46,9 @@
 #include <boost/range/adaptors.hpp>
 #include <boost/range/algorithm.hpp>
 
+#include <glog/logging.h>
+
+namespace asio = boost::asio;
 using namespace boost::filesystem;
 
 namespace android
@@ -55,11 +63,17 @@ private:
         size_t object_size;
         std::string display_name;
         std::string path;
+        int watch_fd;
     };
 
+    MtpServer* local_server;
     uint32_t counter;
     std::map<MtpObjectHandle, DbEntry> db;
     std::map<std::string, MtpObjectFormat> formats = boost::assign::map_list_of
+        (".gif", MTP_FORMAT_GIF)
+        (".png", MTP_FORMAT_PNG)
+        (".jpeg", MTP_FORMAT_JFIF)
+        (".tiff", MTP_FORMAT_TIFF)
         (".ogg", MTP_FORMAT_OGG)
         (".mp3", MTP_FORMAT_MP3)
         (".wav", MTP_FORMAT_WAV)
@@ -67,11 +81,18 @@ private:
         (".aac", MTP_FORMAT_AAC)
         (".flac", MTP_FORMAT_FLAC);
 
+    boost::thread notifier_thread;
+    boost::thread io_service_thread;
+
+    asio::io_service io_svc;
+    asio::posix::stream_descriptor stream_desc;
+    asio::streambuf buf;
+    int inotify_fd;
+
     MtpObjectFormat guess_object_format(std::string extension)
     {
         std::map<std::string, MtpObjectFormat>::iterator it;
 
-        std::cout << __PRETTY_FUNCTION__ << "  extension: " << extension << std::endl;
         it = formats.find(extension);
         if (it == formats.end()) {
             boost::to_upper(extension);
@@ -84,6 +105,58 @@ private:
 	return it->second;
     }
 
+    int setup_dir_inotify(path p)
+    {
+        return inotify_add_watch(inotify_fd,
+                                 p.string().c_str(),
+                                 IN_MODIFY | IN_CREATE | IN_DELETE);
+    }
+
+    
+    void add_file_entry(path p, MtpObjectHandle parent)
+    {
+        MtpObjectHandle handle = counter;
+        DbEntry entry;
+
+        counter++;
+
+        if (is_directory(p)) {
+            entry.storage_id = MTP_STORAGE_FIXED_RAM;
+            entry.parent = parent;
+            entry.display_name = std::string(p.filename().string());
+            entry.path = p.string();
+            entry.object_format = MTP_FORMAT_ASSOCIATION;
+            entry.object_size = 0;
+            entry.watch_fd = setup_dir_inotify(p);
+
+            db.insert( std::pair<MtpObjectHandle, DbEntry>(handle, entry) );
+
+            if (local_server)
+                local_server->sendObjectAdded(handle);
+
+            parse_directory (p, handle);
+        } else {
+            try {
+                entry.storage_id = MTP_STORAGE_FIXED_RAM;
+                entry.parent = parent;
+                entry.display_name = std::string(p.filename().string());
+                entry.path = p.string();
+                entry.object_format = guess_object_format(p.extension().string());
+                entry.object_size = file_size(p);
+
+                VLOG(1) << "Adding \"" << p.string() << "\"";
+
+                db.insert( std::pair<MtpObjectHandle, DbEntry>(handle, entry) );
+
+                if (local_server)
+                    local_server->sendObjectAdded(handle);
+
+            } catch (const filesystem_error& ex) {
+                PLOG(WARNING) << "There was an error reading file properties";
+            }
+        }
+    }
+
     void parse_directory(path p, MtpObjectHandle parent)
     {
 	DbEntry entry;
@@ -93,32 +166,7 @@ private:
 
         for (std::vector<path>::const_iterator it(v.begin()), it_end(v.end()); it != it_end; ++it)
         {
-            MtpObjectHandle handle = counter;
-
-            counter++;
-
-            std::cout << "   " << *it << " handle: " << handle << " parent: " << parent << std::endl;
-
-            entry.storage_id = MTP_STORAGE_FIXED_RAM;
-            entry.parent = parent;
-            entry.display_name = std::string(it->filename().string());
-            entry.path = it->string();
-
-            if (is_regular_file (*it)) {
-                entry.object_format = guess_object_format(it->extension().string());
-                entry.object_size = file_size(*it);
-
-                std::cout << " format: " << std::hex << entry.object_format << std::endl;
-
-                db.insert( std::pair<MtpObjectHandle, DbEntry>(handle, entry) );
-            } else if (is_directory (*it)) {
-                entry.object_format = MTP_FORMAT_ASSOCIATION;
-                entry.object_size = 0;
-
-                db.insert( std::pair<MtpObjectHandle, DbEntry>(handle, entry) );
-
-                parse_directory (*it, handle);
-	    }
+            add_file_entry(*it, parent);
         }
     }
 
@@ -131,45 +179,135 @@ private:
         try {
             if (exists(p)) {
                 if (is_directory(p)) {
-                    std::cout << p << " is a directory containing:\n";
-
                     entry.storage_id = MTP_STORAGE_FIXED_RAM;
                     entry.parent = MTP_PARENT_ROOT;
                     entry.display_name = std::string(p.filename().string());
                     entry.path = p.string();
                     entry.object_format = MTP_FORMAT_ASSOCIATION;
                     entry.object_size = 0;
+                    entry.watch_fd = setup_dir_inotify(p);
 
                     db.insert( std::pair<MtpObjectHandle, DbEntry>(handle, entry) );
 
                     parse_directory (p, handle);
                 }
             } else
-                std::cout << p << " does not exist\n";
+                LOG(WARNING) << p << " does not exist\n";
         }
         catch (const filesystem_error& ex) {
-            std::cout << ex.what() << '\n';
+            LOG(ERROR) << ex.what();
         }
 
     }
 
+    void read_more_notify()
+    {
+        stream_desc.async_read_some(buf.prepare(buf.max_size()),
+                                    boost::bind(&UbuntuMtpDatabase::inotify_handler,
+                                                this,
+                                                asio::placeholders::error,
+                                                asio::placeholders::bytes_transferred));
+    }
+
+    void inotify_handler(const boost::system::error_code&,
+                        std::size_t transferred)
+    {
+        size_t processed = 0;
+     
+        while(transferred - processed >= sizeof(inotify_event))
+        {
+            const char* cdata = processed + asio::buffer_cast<const char*>(buf.data());
+            const inotify_event* ievent = reinterpret_cast<const inotify_event*>(cdata);
+            MtpObjectHandle parent;
+     
+            processed += sizeof(inotify_event) + ievent->len;
+     
+            BOOST_FOREACH(MtpObjectHandle i, db | boost::adaptors::map_keys) {
+                if (db.at(i).watch_fd == ievent->wd) {
+                    parent = i;
+                    break;
+                }
+            }
+
+            path p(db.at(parent).path + "/" + ievent->name);
+
+            if(ievent->len > 0 && ievent->mask & IN_MODIFY)
+            {
+                VLOG(2) << __PRETTY_FUNCTION__ << ": file modified: " << p.string();
+                BOOST_FOREACH(MtpObjectHandle i, db | boost::adaptors::map_keys) {
+                    if (db.at(i).path == p.string()) {
+                        try {
+                            VLOG(2) << "new size: " << file_size(p);
+                            db.at(i).object_size = file_size(p);
+                        } catch (const filesystem_error& ex) {
+                            PLOG(WARNING) << "There was an error reading file properties";
+                        }
+                    }
+                }
+            }
+            else if(ievent->len > 0 && ievent->mask & IN_CREATE)
+            {
+                VLOG(2) << __PRETTY_FUNCTION__ << ": file created: " << p.string();
+
+                /* try to deal with it as if it was a file. */
+                add_file_entry(p, parent);
+            }
+            else if(ievent->len > 0 && ievent->mask & IN_DELETE)
+            {
+                VLOG(2) << __PRETTY_FUNCTION__ << ": file deleted: " << p.string();
+                BOOST_FOREACH(MtpObjectHandle i, db | boost::adaptors::map_keys) {
+                    if (db.at(i).path == p.string()) {
+                        VLOG(2) << "deleting file at handle " << i;
+                        deleteFile(i);
+                        if (local_server)
+                            local_server->sendObjectRemoved(i);
+                        break;
+                    }
+                }
+            }
+        }
+     
+        read_more_notify();
+    }
+
 public:
-    UbuntuMtpDatabase(const char *dir) : counter(1)
+    UbuntuMtpDatabase(const char *dir):
+        counter(1),
+        stream_desc(io_svc),
+        buf(1024)
     {
 	std::string basedir (dir);
 
+        local_server = nullptr;
+
+        inotify_fd = inotify_init();
+        if (inotify_fd <= 0)
+            PLOG(FATAL) << "Unable to initialize inotify";
+
+        stream_desc.assign(inotify_fd);
+
 	db = std::map<MtpObjectHandle, DbEntry>();
+
+        notifier_thread = boost::thread(&UbuntuMtpDatabase::read_more_notify,
+                                       this);
 
 	readFiles(basedir + "/Documents");
 	readFiles(basedir + "/Music");
 	readFiles(basedir + "/Videos");
 	readFiles(basedir + "/Pictures");
 	readFiles(basedir + "/Downloads");
-	
-        std::cout << __PRETTY_FUNCTION__ << ": object count:" << db.size() << std::endl;
+
+        LOG(INFO) << "Added " << counter << " entries to the database.";
+
+        io_service_thread = boost::thread(boost::bind(&asio::io_service::run, &io_svc));
     }
 
-    virtual ~UbuntuMtpDatabase() {}
+    virtual ~UbuntuMtpDatabase() {
+        io_svc.stop();
+        notifier_thread.detach();
+        io_service_thread.join();
+        close(inotify_fd);
+    }
 
     // called from SendObjectInfo to reserve a database entry for the incoming file
     virtual MtpObjectHandle beginSendObject(
@@ -186,7 +324,7 @@ public:
         if (parent == 0)
             return kInvalidObjectHandle;
 
-        std::cout << __PRETTY_FUNCTION__ << ": " << path << " - " << parent << std::endl;
+        VLOG(1) << __PRETTY_FUNCTION__ << ": " << path << " - " << parent;
 
         entry.storage_id = storage;
         entry.parent = parent;
@@ -211,7 +349,7 @@ public:
         MtpObjectFormat format,
         bool succeeded)
     {
-        std::cout << __PRETTY_FUNCTION__ << ": " << path << std::endl;
+        VLOG(1) << __PRETTY_FUNCTION__ << ": " << path;
 
 	if (!succeeded) {
             db.erase(handle);
@@ -230,7 +368,7 @@ public:
         MtpObjectFormat format,
         MtpObjectHandle parent)
     {
-        std::cout << __PRETTY_FUNCTION__ << ": " << storageID << ", " << format << ", " << parent << std::endl;
+        VLOG(1) << __PRETTY_FUNCTION__ << ": " << storageID << ", " << format << ", " << parent;
         MtpObjectHandleList* list = nullptr;
         try
         {
@@ -255,7 +393,7 @@ public:
         MtpObjectFormat format,
         MtpObjectHandle parent)
     {
-        std::cout << __PRETTY_FUNCTION__ << ": " << storageID << ", " << format << ", " << parent << std::endl;
+        VLOG(1) << __PRETTY_FUNCTION__ << ": " << storageID << ", " << format << ", " << parent;
         try
         {
             return db.size();
@@ -270,7 +408,7 @@ public:
     // results can be NULL
     virtual MtpObjectFormatList* getSupportedPlaybackFormats()
     {
-        std::cout << __PRETTY_FUNCTION__ << std::endl;
+        VLOG(1) << __PRETTY_FUNCTION__;
         static const MtpObjectFormatList list = {
             /* Generic files */
             MTP_FORMAT_UNDEFINED,
@@ -298,14 +436,14 @@ public:
     
     virtual MtpObjectFormatList* getSupportedCaptureFormats()
     {
-        std::cout << __PRETTY_FUNCTION__ << std::endl;
+        VLOG(1) << __PRETTY_FUNCTION__;
         static const MtpObjectFormatList list = {MTP_FORMAT_ASSOCIATION, MTP_FORMAT_PNG};
         return new MtpObjectFormatList{list};
     }
     
     virtual MtpObjectPropertyList* getSupportedObjectProperties(MtpObjectFormat format)
     {
-        std::cout << __PRETTY_FUNCTION__ << std::endl;
+        VLOG(1) << __PRETTY_FUNCTION__;
 	/*
         if (format != MTP_FORMAT_PNG)
             return nullptr;
@@ -329,7 +467,7 @@ public:
     
     virtual MtpDevicePropertyList* getSupportedDeviceProperties()
     {
-        std::cout << __PRETTY_FUNCTION__ << std::endl;
+        VLOG(1) << __PRETTY_FUNCTION__;
         static const MtpDevicePropertyList list = { MTP_DEVICE_PROPERTY_UNDEFINED };
         return new MtpDevicePropertyList{list};
     }
@@ -339,7 +477,10 @@ public:
         MtpObjectProperty property,
         MtpDataPacket& packet)
     {        
-        std::cout << __PRETTY_FUNCTION__ << std::endl;
+        VLOG(1) << __PRETTY_FUNCTION__
+                << " handle: " << handle
+                << " property: " << MtpDebug::getObjectPropCodeName(property);
+
         switch(property)
         {
             case MTP_PROPERTY_STORAGE_ID: packet.putUInt32(db.at(handle).storage_id); break;            
@@ -366,7 +507,9 @@ public:
         path oldpath;
         path newpath;
 
-        std::cout << __PRETTY_FUNCTION__ << std::endl;
+        VLOG(1) << __PRETTY_FUNCTION__
+                << " handle: " << handle
+                << " property: " << MtpDebug::getObjectPropCodeName(property);
 
         switch(property)
         {
@@ -385,13 +528,13 @@ public:
                     db.at(handle).display_name = newname;
                     db.at(handle).path = newpath.string();
                 } catch (filesystem_error& fe) {
-                    std::cout << "ERROR: " << fe.what() << std::endl;
+                    LOG(ERROR) << fe.what();
                     return MTP_RESPONSE_DEVICE_BUSY;
                 } catch (std::exception& e) {
-                    std::cout << "ERROR: " << e.what() << std::endl;
+                    LOG(ERROR) << e.what();
                     return MTP_RESPONSE_GENERAL_ERROR;
                 } catch (...) {
-                    std::cout << "ERROR: autre exception" << std::endl;
+                    LOG(ERROR) << "An unexpected error has occurred";
                     return MTP_RESPONSE_GENERAL_ERROR;
 		}
 
@@ -406,7 +549,7 @@ public:
         MtpDeviceProperty property,
         MtpDataPacket& packet)
     {
-        std::cout << __PRETTY_FUNCTION__ << std::endl;
+        VLOG(1) << __PRETTY_FUNCTION__;
         return MTP_RESPONSE_GENERAL_ERROR;
     }
 
@@ -414,14 +557,14 @@ public:
         MtpDeviceProperty property,
         MtpDataPacket& packet)
     {
-        std::cout << __PRETTY_FUNCTION__ << std::endl;
+        VLOG(1) << __PRETTY_FUNCTION__;
         return MTP_RESPONSE_OPERATION_NOT_SUPPORTED;
     }
 
     virtual MtpResponseCode resetDeviceProperty(
         MtpDeviceProperty property)
     {
-        std::cout << __PRETTY_FUNCTION__ << std::endl;
+        VLOG(1) << __PRETTY_FUNCTION__;
         return MTP_RESPONSE_OPERATION_NOT_SUPPORTED;
     }
 
@@ -433,7 +576,7 @@ public:
         int depth,
         MtpDataPacket& packet)
     {
-        std::cout << __PRETTY_FUNCTION__ << std::endl;
+        VLOG(2) << __PRETTY_FUNCTION__;
         return MTP_RESPONSE_OPERATION_NOT_SUPPORTED;
     }
 
@@ -441,7 +584,7 @@ public:
         MtpObjectHandle handle,
         MtpObjectInfo& info)
     {
-        std::cout << __PRETTY_FUNCTION__ << std::endl;
+        VLOG(2) << __PRETTY_FUNCTION__;
 
         info.mHandle = handle;
         info.mStorageID = db.at(handle).storage_id;
@@ -460,6 +603,9 @@ public:
         info.mDateModified = 0;
         info.mKeywords = ::strdup("ubuntu,touch");
         
+        if (VLOG_IS_ON(2))
+            info.print();
+
         return MTP_RESPONSE_OK;
     }
 
@@ -481,7 +627,7 @@ public:
     {
         DbEntry entry = db.at(handle);
 
-        std::cout << __PRETTY_FUNCTION__ << std::endl;
+        VLOG(1) << __PRETTY_FUNCTION__ << " handle: " << handle;
 
         outFilePath = std::string(entry.path);
         outFileLength = entry.object_size;
@@ -495,7 +641,10 @@ public:
         size_t orig_size = db.size();
         size_t new_size;
 
-        std::cout << __PRETTY_FUNCTION__ << std::endl;
+        VLOG(2) << __PRETTY_FUNCTION__ << " handle: " << handle;
+
+        if (db.at(handle).object_format == MTP_FORMAT_ASSOCIATION)
+            inotify_rm_watch(inotify_fd, db.at(handle).watch_fd);
 
         new_size = db.erase(handle);
 
@@ -508,6 +657,7 @@ public:
                 if (db.at(i).parent == handle)
                     db.erase(i);
             }
+
             return MTP_RESPONSE_OK;
         }
         else
@@ -516,7 +666,8 @@ public:
 
     virtual MtpResponseCode moveFile(MtpObjectHandle handle, MtpObjectHandle new_parent)
     {
-        std::cout << __PRETTY_FUNCTION__ << std::endl;
+        VLOG(1) << __PRETTY_FUNCTION__ << " handle: " << handle
+                << " new parent: " << new_parent;
 
         // change parent
         db.at(handle).parent = new_parent;
@@ -527,7 +678,7 @@ public:
     /*
     virtual MtpResponseCode copyFile(MtpObjectHandle handle, MtpObjectHandle new_parent)
     {
-        std::cout << __PRETTY_FUNCTION__ << std::endl;
+        VLOG(2) << __PRETTY_FUNCTION__;
 
         // duplicate DbEntry
         // change parent
@@ -538,7 +689,7 @@ public:
 
     virtual MtpObjectHandleList* getObjectReferences(MtpObjectHandle handle)
     {
-        std::cout << __PRETTY_FUNCTION__ << std::endl;
+        VLOG(1) << __PRETTY_FUNCTION__;
         return nullptr;
     }
 
@@ -546,7 +697,7 @@ public:
         MtpObjectHandle handle,
         MtpObjectHandleList* references)
     {
-        std::cout << __PRETTY_FUNCTION__ << std::endl;
+        VLOG(1) << __PRETTY_FUNCTION__;
         return MTP_RESPONSE_OPERATION_NOT_SUPPORTED;    
     }
 
@@ -554,7 +705,8 @@ public:
         MtpObjectProperty property,
         MtpObjectFormat format)
     {
-        std::cout << __PRETTY_FUNCTION__ << std::endl;
+        VLOG(1) << __PRETTY_FUNCTION__ << MtpDebug::getObjectPropCodeName(property);
+
         MtpProperty* result = nullptr;
         switch(property)
         {
@@ -574,18 +726,21 @@ public:
 
     virtual MtpProperty* getDevicePropertyDesc(MtpDeviceProperty property)
     {
-        std::cout << __PRETTY_FUNCTION__ << std::endl;
+        VLOG(1) << __PRETTY_FUNCTION__ << MtpDebug::getDevicePropCodeName(property);
         return new MtpProperty(MTP_DEVICE_PROPERTY_UNDEFINED, MTP_TYPE_UNDEFINED);
     }
     
-    virtual void sessionStarted()
+    virtual void sessionStarted(MtpServer* server)
     {
-        std::cout << __PRETTY_FUNCTION__ << std::endl;
+        VLOG(1) << __PRETTY_FUNCTION__;
+        local_server = server;
     }
 
     virtual void sessionEnded()
     {
-        std::cout << __PRETTY_FUNCTION__ << std::endl;
+        VLOG(1) << __PRETTY_FUNCTION__;
+        VLOG(1) << "objects in db at session end: " << db.size();
+        local_server = nullptr;
     }
 };
 }

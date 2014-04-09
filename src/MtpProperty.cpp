@@ -22,8 +22,11 @@
 #include "MtpStringBuffer.h"
 #include "MtpUtils.h"
 
+#include <iomanip>
 #include <cstring>
 #include <sstream>
+
+#include <glog/logging.h>
 
 namespace android {
 
@@ -94,7 +97,9 @@ MtpProperty::MtpProperty(MtpPropertyCode propCode,
                 mDefaultValue.u.u64 = defaultValue;
                 break;
             default:
-                ALOGE("unknown type %04X in MtpProperty::MtpProperty", type);
+                LOG(ERROR) << "unknown type "
+                           << std::hex << type << std::dec
+                           << " in MtpProperty::MtpProperty";
         }
     }
 }
@@ -270,7 +275,7 @@ void MtpProperty::setFormRange(int min, int max, int step) {
             mStepSize.u.u64 = step;
             break;
         default:
-            ALOGE("unsupported type for MtpProperty::setRange");
+            LOG(ERROR) << "unsupported type for MtpProperty::setRange";
             break;
     }
 }
@@ -309,7 +314,7 @@ void MtpProperty::setFormEnum(const int* values, int count) {
                     mEnumValues[i].u.u64 = value;
                     break;
                 default:
-                    ALOGE("unsupported type for MtpProperty::setEnum");
+                    LOG(ERROR) << "unsupported type for MtpProperty::setEnum";
                     break;
         }
     }
@@ -323,46 +328,48 @@ void MtpProperty::print() {
     MtpString buffer;
     bool deviceProp = isDeviceProperty();
     if (deviceProp)
-        ALOGI("    %s (%04X)", MtpDebug::getDevicePropCodeName(mCode), mCode);
+        VLOG(2) << MtpDebug::getDevicePropCodeName(mCode)
+                << " (" << std::hex << mCode << std::dec << ")";
     else
-        ALOGI("    %s (%04X)", MtpDebug::getObjectPropCodeName(mCode), mCode);
-    ALOGI("    type %04X", mType);
-    ALOGI("    writeable %s", (mWriteable ? "true" : "false"));
-    buffer = "    default value: ";
+        VLOG(2) << MtpDebug::getObjectPropCodeName(mCode)
+                << " (" << std::hex << mCode << std::dec << ")";
+    VLOG(2) << mType;
+    VLOG(2) << "writeable " << (mWriteable ? "true" : "false");
+    buffer = "default value: ";
     print(mDefaultValue, buffer);
-    ALOGI("%s", buffer.c_str());
+    VLOG(2) << buffer.c_str();
     if (deviceProp) {
-        buffer = "    current value: ";
+        buffer = "current value: ";
         print(mCurrentValue, buffer);
-        ALOGI("%s", buffer.c_str());
+        VLOG(2) << buffer.c_str();
     }
     switch (mFormFlag) {
         case kFormNone:
             break;
         case kFormRange:
-            buffer = "    Range (";
+            buffer = "Range (";
             print(mMinimumValue, buffer);
             buffer += ", ";
             print(mMaximumValue, buffer);
             buffer += ", ";
             print(mStepSize, buffer);
             buffer += ")";
-            ALOGI("%s", buffer.c_str());
+            VLOG(2) << buffer.c_str();
             break;
         case kFormEnum:
-            buffer = "    Enum { ";
+            buffer = "Enum { ";
             for (int i = 0; i < mEnumLength; i++) {
                 print(mEnumValues[i], buffer);
                 buffer += " ";
             }
             buffer += "}";
-            ALOGI("%s", buffer.c_str());
+            VLOG(2) << buffer.c_str();
             break;
         case kFormDateTime:
-            ALOGI("    DateTime\n");
+            VLOG(2) << "DateTime";
             break;
         default:
-            ALOGI("    form %d\n", mFormFlag);
+            VLOG(2) << "form " << mFormFlag;
             break;
     }
 }
@@ -409,7 +416,7 @@ void MtpProperty::print(MtpPropertyValue& value, MtpString& buffer) {
             ss << value.str;
             break;
         default:
-            ALOGE("unsupported type for MtpProperty::print\n");
+            LOG(ERROR) << "unsupported type for MtpProperty::print";
             break;
     }
     
@@ -465,7 +472,9 @@ void MtpProperty::readValue(MtpDataPacket& packet, MtpPropertyValue& value) {
             value.str = strdup(stringBuffer);
             break;
         default:
-            ALOGE("unknown type %04X in MtpProperty::readValue", mType);
+            LOG(ERROR) << "unknown type "
+                       << std::hex << mType << std::dec
+                       << " in MtpProperty::readValue";
     }
 }
 
@@ -520,7 +529,9 @@ void MtpProperty::writeValue(MtpDataPacket& packet, MtpPropertyValue& value) {
                 packet.putEmptyString();
             break;
         default:
-            ALOGE("unknown type %04X in MtpProperty::writeValue", mType);
+            LOG(ERROR) << "unknown type "
+                       << std::hex << mType << std::dec
+                       << " in MtpProperty::writeValue";
     }
 }
 
