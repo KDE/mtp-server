@@ -412,6 +412,22 @@ public:
         static const MtpObjectFormatList list = {
             /* Generic files */
             MTP_FORMAT_UNDEFINED,
+            MTP_FORMAT_ASSOCIATION, // folders
+            MTP_FORMAT_TEXT,
+            MTP_FORMAT_HTML,
+
+            /* Supported image formats */
+            MTP_FORMAT_DEFINED, // generic image
+            MTP_FORMAT_EXIF_JPEG,
+            MTP_FORMAT_TIFF_EP,
+            MTP_FORMAT_BMP,
+            MTP_FORMAT_GIF,
+            MTP_FORMAT_JFIF,
+            MTP_FORMAT_PNG,
+            MTP_FORMAT_TIFF,
+            MTP_FORMAT_TIFF_IT,
+            MTP_FORMAT_JP2,
+            MTP_FORMAT_JPX,
 
             /* Supported audio formats */
             MTP_FORMAT_OGG,
