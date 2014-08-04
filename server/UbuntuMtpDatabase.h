@@ -468,7 +468,7 @@ public:
     virtual MtpDevicePropertyList* getSupportedDeviceProperties()
     {
         VLOG(1) << __PRETTY_FUNCTION__;
-        static const MtpDevicePropertyList list = { MTP_DEVICE_PROPERTY_UNDEFINED };
+        static const MtpDevicePropertyList list = { MTP_DEVICE_PROPERTY_DEVICE_FRIENDLY_NAME };
         return new MtpDevicePropertyList{list};
     }
 
@@ -550,7 +550,15 @@ public:
         MtpDataPacket& packet)
     {
         VLOG(1) << __PRETTY_FUNCTION__;
-        return MTP_RESPONSE_GENERAL_ERROR;
+        switch(property)
+        {
+            case MTP_DEVICE_PROPERTY_DEVICE_FRIENDLY_NAME:
+                packet.putString("");
+                break;
+            default: return MTP_RESPONSE_OPERATION_NOT_SUPPORTED; break;
+        }
+        
+        return MTP_RESPONSE_OK;
     }
 
     virtual MtpResponseCode setDevicePropertyValue(
