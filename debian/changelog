@@ -11,6 +11,13 @@ mtp (0.0.4+14.04.20140814-0ubuntu1) UNRELEASED; urgency=medium
 
  -- Mathieu Trudel-Lapierre <mathieu-tl@ubuntu.com>  Thu, 14 Aug 2014 11:09:02 -0400
 
+mtp (0.0.3+14.04.20140409-0ubuntu3) utopic; urgency=medium
+
+  * make sure mtp-server only gets started in user sessions and not in lightdm
+    greeter sessions
+
+ -- Oliver Grawert <ogra@ubuntu.com>  Tue, 03 Jun 2014 13:24:56 +0200
+
 mtp (0.0.3+14.04.20140409-0ubuntu2) utopic; urgency=high
 
   * No change rebuild against boost1.55.
