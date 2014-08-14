@@ -114,7 +114,7 @@ private:
     }
 
     
-    void add_file_entry(path p, MtpObjectHandle parent)
+    void add_file_entry(path p, MtpObjectHandle parent, MtpStorageID storage)
     {
         MtpObjectHandle handle = counter;
         DbEntry entry;
@@ -122,28 +122,30 @@ private:
         counter++;
 
         if (is_directory(p)) {
-            entry.storage_id = MTP_STORAGE_FIXED_RAM;
+            entry.storage_id = storage;
             entry.parent = parent;
             entry.display_name = std::string(p.filename().string());
             entry.path = p.string();
             entry.object_format = MTP_FORMAT_ASSOCIATION;
             entry.object_size = 0;
             entry.watch_fd = setup_dir_inotify(p);
+            entry.last_modified = last_write_time(p);
 
             db.insert( std::pair<MtpObjectHandle, DbEntry>(handle, entry) );
 
             if (local_server)
                 local_server->sendObjectAdded(handle);
 
-            parse_directory (p, handle);
+            parse_directory (p, handle, storage);
         } else {
             try {
-                entry.storage_id = MTP_STORAGE_FIXED_RAM;
+                entry.storage_id = storage;
                 entry.parent = parent;
                 entry.display_name = std::string(p.filename().string());
                 entry.path = p.string();
                 entry.object_format = guess_object_format(p.extension().string());
                 entry.object_size = file_size(p);
+                entry.last_modified = last_write_time(p);
 
                 VLOG(1) << "Adding \"" << p.string() << "\"";
 
@@ -158,7 +160,7 @@ private:
         }
     }
 
-    void parse_directory(path p, MtpObjectHandle parent)
+    void parse_directory(path p, MtpObjectHandle parent, MtpStorageID storage)
     {
 	DbEntry entry;
         std::vector<path> v;
@@ -167,11 +169,11 @@ private:
 
         for (std::vector<path>::const_iterator it(v.begin()), it_end(v.end()); it != it_end; ++it)
         {
-            add_file_entry(*it, parent);
+            add_file_entry(*it, parent, storage);
         }
     }
 
-    void readFiles(const std::string& sourcedir)
+    void readFiles(const std::string& sourcedir, MtpStorageID storage, bool hidden)
     {
         path p (sourcedir);
 	DbEntry entry;
@@ -180,20 +182,34 @@ private:
         try {
             if (exists(p)) {
                 if (is_directory(p)) {
-                    entry.storage_id = MTP_STORAGE_FIXED_RAM;
-                    entry.parent = MTP_PARENT_ROOT;
+                    entry.storage_id = storage;
+                    entry.parent = hidden ? MTP_PARENT_ROOT : 0;
                     entry.display_name = std::string(p.filename().string());
                     entry.path = p.string();
                     entry.object_format = MTP_FORMAT_ASSOCIATION;
                     entry.object_size = 0;
                     entry.watch_fd = setup_dir_inotify(p);
+                    entry.last_modified = last_write_time(p);
 
                     db.insert( std::pair<MtpObjectHandle, DbEntry>(handle, entry) );
 
-                    parse_directory (p, handle);
+                    parse_directory (p, hidden ? 0 : handle, storage);
+                } else
+                    LOG(WARNING) << p << " is not a directory.\n";
+            } else {
+                if (storage == MTP_STORAGE_FIXED_RAM)
+                    LOG(WARNING) << p << " does not exist\n";
+                else {
+                    entry.storage_id = storage;
+                    entry.parent = -1;
+                    entry.display_name = std::string(p.parent_path().filename().string());
+                    entry.path = p.parent_path().string();
+                    entry.object_format = MTP_FORMAT_ASSOCIATION;
+                    entry.object_size = 0;
+                    entry.watch_fd = setup_dir_inotify(p.parent_path());
+                    entry.last_modified = 0;
                 }
-            } else
-                LOG(WARNING) << p << " does not exist\n";
+            }
         }
         catch (const filesystem_error& ex) {
             LOG(ERROR) << ex.what();
@@ -248,10 +264,22 @@ private:
             }
             else if(ievent->len > 0 && ievent->mask & IN_CREATE)
             {
+                int parent_handle = parent;
+
                 VLOG(2) << __PRETTY_FUNCTION__ << ": file created: " << p.string();
 
+                /* Deal with the special case where the SD card might initially
+                 * require an inotify watch, because it's not yet mounted.
+                 * In this case, the SD card inotify watch is entered as a
+                 * normal object, but the parent for the "real" directory
+                 * for the mounted removable media should be the MTP root
+                 * for the storage ID.
+                 */
+                if (db.at(parent).parent == MTP_PARENT_ROOT)
+                    parent_handle = 0;
+
                 /* try to deal with it as if it was a file. */
-                add_file_entry(p, parent);
+                add_file_entry(p, parent_handle, db.at(parent).storage_id);
             }
             else if(ievent->len > 0 && ievent->mask & IN_DELETE)
             {
@@ -272,18 +300,16 @@ private:
     }
 
 public:
-    UbuntuMtpDatabase(const char *dir):
+    UbuntuMtpDatabase():
         counter(1),
         stream_desc(io_svc),
         buf(1024)
     {
-	std::string basedir (dir);
-
         local_server = nullptr;
 
         inotify_fd = inotify_init();
         if (inotify_fd <= 0)
-            PLOG(FATAL) << "Unable to initialize inotify";
+            PLOG(FATAL) << "Invalid file descriptor to inotify";
 
         stream_desc.assign(inotify_fd);
 
@@ -291,14 +317,6 @@ public:
 
         notifier_thread = boost::thread(&UbuntuMtpDatabase::read_more_notify,
                                        this);
-
-	readFiles(basedir + "/Documents");
-	readFiles(basedir + "/Music");
-	readFiles(basedir + "/Videos");
-	readFiles(basedir + "/Pictures");
-	readFiles(basedir + "/Downloads");
-
-        LOG(INFO) << "Added " << counter << " entries to the database.";
 
         io_service_thread = boost::thread(boost::bind(&asio::io_service::run, &io_svc));
     }
@@ -308,6 +326,22 @@ public:
         notifier_thread.detach();
         io_service_thread.join();
         close(inotify_fd);
+    }
+
+    virtual void addStoragePath(const MtpString& path,
+                                MtpStorageID storage,
+                                bool hidden)
+    {
+	readFiles(path, storage, hidden);
+    }
+
+    virtual void removeStorage(MtpStorageID storage)
+    {
+        // remove all database entries corresponding to said storage.
+        BOOST_FOREACH(MtpObjectHandle i, db | boost::adaptors::map_keys) {
+            if (db.at(i).storage_id == storage)
+                db.erase(i);
+        }
     }
 
     // called from SendObjectInfo to reserve a database entry for the incoming file

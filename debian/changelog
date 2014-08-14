@@ -4,7 +4,10 @@ mtp (0.0.4+14.04.20140814-0ubuntu1) UNRELEASED; urgency=medium
     - Bugfixes.
     - Enhancements on error handling.
     - Add support for working with Windows systems.
-   
+    - Add support for locking: don't allow access to storage while the screen
+      is locked.
+    - Support removable storage by watching for mounted storage in the /media
+      directory tree.   
 
  -- Mathieu Trudel-Lapierre <mathieu-tl@ubuntu.com>  Thu, 14 Aug 2014 11:09:02 -0400
 
