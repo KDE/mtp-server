@@ -1,3 +1,13 @@
+mtp (0.0.4+14.04.20140814-0ubuntu1) UNRELEASED; urgency=medium
+
+  * New release:
+    - Bugfixes.
+    - Enhancements on error handling.
+    - Add support for working with Windows systems.
+   
+
+ -- Mathieu Trudel-Lapierre <mathieu-tl@ubuntu.com>  Thu, 14 Aug 2014 11:09:02 -0400
+
 mtp (0.0.3+14.04.20140409-0ubuntu1) trusty; urgency=medium
 
   [ Mathieu Trudel-Lapierre ]
