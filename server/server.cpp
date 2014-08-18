@@ -119,13 +119,13 @@ private:
 
     // Security
     std::shared_ptr<core::dbus::Property<core::UnityGreeter::Properties::IsActive> > is_active;
-    bool deviceLocked;
 
     // inotify stuff
     boost::thread notifier_thread;
     boost::thread io_service_thread;
 
     asio::io_service io_svc;
+    asio::io_service::work work;
     asio::posix::stream_descriptor stream_desc;
     asio::streambuf buf;
 
@@ -134,27 +134,37 @@ private:
     int watch_fd;
     int media_fd;
 
-    // removable storage
-    std::map<MtpStorage*, bool> removables;
-
+    // storage
+    std::map<std::string, std::tuple<MtpStorage*, bool> > removables;
+    bool home_storage_added;
 
     void add_removable_storage(const char *path, const char *name)
     {
+        static int storageID = MTP_STORAGE_REMOVABLE_RAM;
+
         MtpStorage *removable = new MtpStorage(
-            MTP_STORAGE_REMOVABLE_RAM, 
+            storageID, 
             path,
             name,
             1024 * 1024 * 100,  /* 100 MB reserved space, to avoid filling the disk */
             true,
             1024 * 1024 * 1024 * 2  /* 2GB arbitrary max file size */);
 
-        mtp_database->addStoragePath(path, MTP_STORAGE_REMOVABLE_RAM, true);
+        storageID++;
 
-        if (!is_active->get())
+        bool screen_locked = is_active->get();
+
+        if (!screen_locked) {
+            mtp_database->addStoragePath(path,
+                                         removable->getStorageID(),
+                                         true);
             server->addStorage(removable);
+        }
 
-        removables.insert(std::pair<MtpStorage*, bool>(removable,
-                                                       deviceLocked ? false : true));
+        removables.insert(std::pair<std::string, std::tuple<MtpStorage*, bool> >
+                              (name,
+                               std::make_tuple(removable,
+                                               screen_locked ? false : true)));
     }
 
     void add_mountpoint_watch(const std::string& path)
@@ -193,15 +203,12 @@ private:
 
             if (ievent->len > 0 && ievent->mask & IN_CREATE)
             {
-
                 if (ievent->wd == media_fd) {
                     VLOG(1) << "media root was created for user " << ievent->name;
                     add_mountpoint_watch(storage_path.string());
                 } else {
                     VLOG(1) << "Storage was added: " << ievent->name;
-
                     storage_path /= ievent->name;
-
                     add_removable_storage(storage_path.string().c_str(), ievent->name);
                 }
             }
@@ -210,11 +217,16 @@ private:
                 VLOG(1) << "Storage was removed: " << ievent->name;
 
                 // Try to match to which storage was removed.
-                BOOST_FOREACH(MtpStorage *storage, removables | boost::adaptors::map_keys) {
-                    VLOG(2) << "storage: " << storage->getDescription() << "  event: " << ievent->name;
-                    if (storage->getDescription() == ievent->name) {
+                BOOST_FOREACH(std::string name, removables | boost::adaptors::map_keys) {
+                    if (name == ievent->name) {
+                        auto t = removables.at(name);
+                        MtpStorage *storage = std::get<0>(t);
+
+                        VLOG(2) << "removing storage id "
+                                << storage->getStorageID();
+
                         server->removeStorage(storage);
-                        mtp_database->removeStorage(MTP_STORAGE_REMOVABLE_RAM);
+                        mtp_database->removeStorage(storage->getStorageID());
                     }
                 }
             }
@@ -227,6 +239,7 @@ public:
 
     MtpDaemon(int fd):
         stream_desc(io_svc),
+        work(io_svc),
         buf(1024)
     {
         userdata = getpwuid (getuid());
@@ -235,6 +248,7 @@ public:
         inotify_fd = inotify_init();
         if (inotify_fd <= 0)
             PLOG(FATAL) << "Unable to initialize inotify";
+        VLOG(1) << "using inotify fd " << inotify_fd << " for daemon";
 
         stream_desc.assign(inotify_fd);
         notifier_thread = boost::thread(&MtpDaemon::read_more_notify, this);
@@ -290,6 +304,7 @@ public:
                                      MTP_STORAGE_FIXED_RAM, false);
         mtp_database->addStoragePath(std::string(userdata->pw_dir) + "/Downloads",
                                      MTP_STORAGE_FIXED_RAM, false);
+        home_storage_added = false;
 
         // Get any already-mounted removable storage.
         path p(std::string("/media/") + userdata->pw_name);
@@ -328,22 +343,39 @@ public:
             {
                 if (!active) {
                     VLOG(2) << "device was unlocked, adding storage";
-                    deviceLocked = active;
-                    if (home_storage)
+                    if (home_storage && !home_storage_added) {
                         server->addStorage(home_storage);
-                    BOOST_FOREACH(MtpStorage *storage, removables | boost::adaptors::map_keys) {
-                        if (!removables.at(storage))
+                        home_storage_added = true;
+                    }
+                    BOOST_FOREACH(std::string name, removables | boost::adaptors::map_keys) {
+                        auto t = removables.at(name);
+                        MtpStorage *storage = std::get<0>(t);
+                        bool added = std::get<1>(t);
+                        if (!added) {
+                            mtp_database->addStoragePath(storage->getPath(),
+                                                         storage->getStorageID(),
+                                                         true);
                             server->addStorage(storage);
+                        }
                     }
                 }
             });
         } else {
             VLOG(2) << "device is not locked, adding storage";
-            if (home_storage)
+            if (home_storage) {
                 server->addStorage(home_storage);
-            BOOST_FOREACH(MtpStorage *storage, removables | boost::adaptors::map_keys) {
-                if (!removables.at(storage))
+                home_storage_added = true;
+            }
+            BOOST_FOREACH(std::string name, removables | boost::adaptors::map_keys) {
+                auto t = removables.at(name);
+                MtpStorage *storage = std::get<0>(t);
+                bool added = std::get<1>(t);
+                if (!added) {
+                    mtp_database->addStoragePath(storage->getPath(),
+                                                 storage->getStorageID(),
+                                                 true);
                     server->addStorage(storage);
+                }
             }
         }
 

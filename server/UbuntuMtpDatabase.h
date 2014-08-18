@@ -45,6 +45,7 @@
 #include <boost/filesystem.hpp>
 #include <boost/range/adaptors.hpp>
 #include <boost/range/algorithm.hpp>
+#include <boost/date_time/posix_time/posix_time.hpp>
 
 #include <glog/logging.h>
 
@@ -86,6 +87,7 @@ private:
     boost::thread io_service_thread;
 
     asio::io_service io_svc;
+    asio::io_service::work work;
     asio::posix::stream_descriptor stream_desc;
     asio::streambuf buf;
     int inotify_fd;
@@ -164,8 +166,25 @@ private:
     {
 	DbEntry entry;
         std::vector<path> v;
+        boost::system::error_code ec;
+        directory_iterator i (p, ec);
 
-        copy(directory_iterator(p), directory_iterator(), std::back_inserter(v));
+        if (ec == boost::system::errc::permission_denied) {
+            boost::thread delay_thread;
+            asio::io_service io;
+            asio::deadline_timer timer (io, boost::posix_time::millisec(500));
+
+            timer.async_wait(boost::bind(&UbuntuMtpDatabase::parse_directory,
+                                         this,
+                                         p,
+                                         parent,
+                                         storage));
+
+            delay_thread = boost::thread(boost::bind(&asio::io_service::run, &io));
+            return;
+        }
+
+        copy(i, directory_iterator(), std::back_inserter(v));
 
         for (std::vector<path>::const_iterator it(v.begin()), it_end(v.end()); it != it_end; ++it)
         {
@@ -303,6 +322,7 @@ public:
     UbuntuMtpDatabase():
         counter(1),
         stream_desc(io_svc),
+        work(io_svc),
         buf(1024)
     {
         local_server = nullptr;
@@ -310,6 +330,7 @@ public:
         inotify_fd = inotify_init();
         if (inotify_fd <= 0)
             PLOG(FATAL) << "Invalid file descriptor to inotify";
+        VLOG(1) << "using inotify fd " << inotify_fd << " for database";
 
         stream_desc.assign(inotify_fd);
 
