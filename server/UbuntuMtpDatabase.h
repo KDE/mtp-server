@@ -49,6 +49,8 @@
 
 #include <glog/logging.h>
 
+#define ALL_PROPERTIES 0xffffffff
+
 namespace asio = boost::asio;
 using namespace boost::filesystem;
 
@@ -214,10 +216,10 @@ private:
 
                     parse_directory (p, hidden ? 0 : handle, storage);
                 } else
-                    LOG(WARNING) << p << " is not a directory.\n";
+                    LOG(WARNING) << p << " is not a directory.";
             } else {
                 if (storage == MTP_STORAGE_FIXED_RAM)
-                    LOG(WARNING) << p << " does not exist\n";
+                    LOG(WARNING) << p << " does not exist.";
                 else {
                     entry.storage_id = storage;
                     entry.parent = -1;
@@ -469,9 +471,8 @@ public:
 
         try
         {
-            MtpObjectHandleList *list = getObjectList(storageID, format, parent);
+            boost::scoped_ptr<MtpObjectHandleList> list(getObjectList(storageID, format, parent));
             result = list->size();
-            delete list;
         } catch(...)
         {
         }
@@ -742,7 +743,7 @@ public:
 
         VLOG(2) << __PRETTY_FUNCTION__;
 
-        if (handle == 0xffffffff)
+        if (handle == kInvalidObjectHandle)
             return MTP_RESPONSE_PARAMETER_NOT_SUPPORTED;
 
         if (property == 0 && groupCode == 0)
@@ -781,7 +782,7 @@ public:
          * b... rinse, repeat.
          */
 
-        if (property == 0xffffffff)
+        if (property == ALL_PROPERTIES)
              packet.putUInt32(6 * handles.size());
         else
              packet.putUInt32(1 * handles.size());
@@ -790,7 +791,7 @@ public:
             DbEntry entry = db.at(i);
 
             // Persistent Unique Identifier.
-            if (property == 0xffffffff || property == MTP_PROPERTY_PERSISTENT_UID) {
+            if (property == ALL_PROPERTIES || property == MTP_PROPERTY_PERSISTENT_UID) {
                 packet.putUInt32(i);
                 packet.putUInt16(MTP_PROPERTY_PERSISTENT_UID);
                 packet.putUInt16(MTP_TYPE_UINT128);
@@ -798,7 +799,7 @@ public:
             }
 
             // Storage ID
-            if (property == 0xffffffff || property == MTP_PROPERTY_STORAGE_ID) {
+            if (property == ALL_PROPERTIES || property == MTP_PROPERTY_STORAGE_ID) {
                 packet.putUInt32(i);
                 packet.putUInt16(MTP_PROPERTY_STORAGE_ID);
                 packet.putUInt16(MTP_TYPE_UINT32);
@@ -806,7 +807,7 @@ public:
             }
 
             // Parent
-            if (property == 0xffffffff || property == MTP_PROPERTY_PARENT_OBJECT) {
+            if (property == ALL_PROPERTIES || property == MTP_PROPERTY_PARENT_OBJECT) {
                 packet.putUInt32(i);
                 packet.putUInt16(MTP_PROPERTY_PARENT_OBJECT);
                 packet.putUInt16(MTP_TYPE_UINT32);
@@ -814,7 +815,7 @@ public:
             }
 
             // Object Format
-            if (property == 0xffffffff || property == MTP_PROPERTY_OBJECT_FORMAT) {
+            if (property == ALL_PROPERTIES || property == MTP_PROPERTY_OBJECT_FORMAT) {
                 packet.putUInt32(i);
                 packet.putUInt16(MTP_PROPERTY_OBJECT_FORMAT);
                 packet.putUInt16(MTP_TYPE_UINT16);
@@ -822,7 +823,7 @@ public:
             }
 
             // Object Size
-            if (property == 0xffffffff || property == MTP_PROPERTY_OBJECT_SIZE) {
+            if (property == ALL_PROPERTIES || property == MTP_PROPERTY_OBJECT_SIZE) {
                 packet.putUInt32(i);
                 packet.putUInt16(MTP_PROPERTY_OBJECT_SIZE);
                 packet.putUInt16(MTP_TYPE_UINT32);
@@ -830,7 +831,7 @@ public:
             }
 
             // Object File Name
-            if (property == 0xffffffff || property == MTP_PROPERTY_OBJECT_FILE_NAME) {
+            if (property == ALL_PROPERTIES || property == MTP_PROPERTY_OBJECT_FILE_NAME) {
                 packet.putUInt32(i);
                 packet.putUInt16(MTP_PROPERTY_OBJECT_FILE_NAME);
                 packet.putUInt16(MTP_TYPE_STR);
@@ -838,7 +839,7 @@ public:
             }
 
             // Display Name
-            if (property == 0xffffffff || property == MTP_PROPERTY_DISPLAY_NAME) {
+            if (property == ALL_PROPERTIES || property == MTP_PROPERTY_DISPLAY_NAME) {
                 packet.putUInt32(i);
                 packet.putUInt16(MTP_PROPERTY_DISPLAY_NAME);
                 packet.putUInt16(MTP_TYPE_STR);
@@ -846,7 +847,7 @@ public:
             }
 
             // Association Type
-            if (property == 0xffffffff || property == MTP_PROPERTY_ASSOCIATION_TYPE) {
+            if (property == ALL_PROPERTIES || property == MTP_PROPERTY_ASSOCIATION_TYPE) {
                 packet.putUInt32(i);
                 packet.putUInt16(MTP_PROPERTY_ASSOCIATION_TYPE);
                 packet.putUInt16(MTP_TYPE_UINT16);
@@ -857,7 +858,7 @@ public:
             }
 
             // Association Description
-            if (property == 0xffffffff || property == MTP_PROPERTY_ASSOCIATION_DESC) {
+            if (property == ALL_PROPERTIES || property == MTP_PROPERTY_ASSOCIATION_DESC) {
                 packet.putUInt32(i);
                 packet.putUInt16(MTP_PROPERTY_ASSOCIATION_DESC);
                 packet.putUInt16(MTP_TYPE_UINT32);
@@ -865,7 +866,7 @@ public:
             }
 
             // Protection Status
-            if (property == 0xffffffff || property == MTP_PROPERTY_PROTECTION_STATUS) {
+            if (property == ALL_PROPERTIES || property == MTP_PROPERTY_PROTECTION_STATUS) {
                 packet.putUInt32(i);
                 packet.putUInt16(MTP_PROPERTY_PROTECTION_STATUS);
                 packet.putUInt16(MTP_TYPE_UINT16);
@@ -874,7 +875,7 @@ public:
             }
 
             // Date Created
-            if (property == 0xffffffff || property == MTP_PROPERTY_DATE_CREATED) {
+            if (property == ALL_PROPERTIES || property == MTP_PROPERTY_DATE_CREATED) {
                 char date[20];
                 formatDateTime(0, date, sizeof(date));
                 packet.putUInt32(i);
@@ -884,7 +885,7 @@ public:
             }
 
             // Date Modified
-            if (property == 0xffffffff || property == MTP_PROPERTY_DATE_MODIFIED) {
+            if (property == ALL_PROPERTIES || property == MTP_PROPERTY_DATE_MODIFIED) {
                 char date[20];
                 formatDateTime(entry.last_modified, date, sizeof(date));
                 packet.putUInt32(i);
@@ -894,7 +895,7 @@ public:
             }
 
             // Hidden
-            if (property == 0xffffffff || property == MTP_PROPERTY_HIDDEN) {
+            if (property == ALL_PROPERTIES || property == MTP_PROPERTY_HIDDEN) {
                 packet.putUInt32(i);
                 packet.putUInt16(MTP_PROPERTY_HIDDEN);
                 packet.putUInt16(MTP_TYPE_UINT16);
@@ -902,7 +903,7 @@ public:
             }
 
             // Non Consumable
-            if (property == 0xffffffff || property == MTP_PROPERTY_NON_CONSUMABLE) {
+            if (property == ALL_PROPERTIES || property == MTP_PROPERTY_NON_CONSUMABLE) {
                 packet.putUInt32(i);
                 packet.putUInt16(MTP_PROPERTY_NON_CONSUMABLE);
                 packet.putUInt16(MTP_TYPE_UINT16);
@@ -937,10 +938,9 @@ public:
             info.mImagePixHeight = 0;
             info.mImagePixDepth = 0;
             info.mParent = db.at(handle).parent;
-            if (info.mFormat == MTP_FORMAT_ASSOCIATION)
-                info.mAssociationType = MTP_ASSOCIATION_TYPE_GENERIC_FOLDER;
-            else
-                info.mAssociationType = 0;
+            info.mAssociationType
+                = info.mFormat == MTP_FORMAT_ASSOCIATION
+                    ? MTP_ASSOCIATION_TYPE_GENERIC_FOLDER : 0;
             info.mAssociationDesc = 0;
             info.mSequenceNumber = 0;
             info.mName = ::strdup(db.at(handle).display_name.c_str());
