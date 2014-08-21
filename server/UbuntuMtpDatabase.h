@@ -172,18 +172,9 @@ private:
         directory_iterator i (p, ec);
 
         if (ec == boost::system::errc::permission_denied) {
-            boost::thread delay_thread;
-            asio::io_service io;
-            asio::deadline_timer timer (io, boost::posix_time::millisec(500));
-
-            timer.async_wait(boost::bind(&UbuntuMtpDatabase::parse_directory,
-                                         this,
-                                         p,
-                                         parent,
-                                         storage));
-
-            delay_thread = boost::thread(boost::bind(&asio::io_service::run, &io));
-            return;
+            VLOG(2) << "Could not immediately read dir; retrying.";
+            boost::this_thread::sleep(boost::posix_time::millisec(500));
+            i = directory_iterator(p);
         }
 
         copy(i, directory_iterator(), std::back_inserter(v));
