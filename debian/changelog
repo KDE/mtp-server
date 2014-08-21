@@ -1,5 +1,6 @@
-mtp (0.0.4+14.04.20140814-0ubuntu1) UNRELEASED; urgency=medium
+mtp (0.0.4+14.10.20140821-0ubuntu1) utopic; urgency=medium
 
+  [ Mathieu Trudel-Lapierre ]
   * New release:
     - Bugfixes.
     - Enhancements on error handling.
@@ -9,7 +10,7 @@ mtp (0.0.4+14.04.20140814-0ubuntu1) UNRELEASED; urgency=medium
     - Support removable storage by watching for mounted storage in the /media
       directory tree.   
 
- -- Mathieu Trudel-Lapierre <mathieu-tl@ubuntu.com>  Thu, 14 Aug 2014 11:09:02 -0400
+ -- Ubuntu daily release <ps-jenkins@lists.canonical.com>  Thu, 21 Aug 2014 20:05:32 +0000
 
 mtp (0.0.3+14.04.20140409-0ubuntu3) utopic; urgency=medium
 
