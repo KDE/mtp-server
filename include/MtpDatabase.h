@@ -30,6 +30,14 @@ class MtpDatabase {
 public:
     virtual ~MtpDatabase() {}
 
+    // called to add a path to include in the database.
+    virtual void                    addStoragePath(const MtpString& path,
+                                                   MtpStorageID storage,
+                                                   bool hidden) = 0;
+
+    // Called to remove database entries for a storage.
+    virtual void                    removeStorage(MtpStorageID storage) = 0;
+
     // called from SendObjectInfo to reserve a database entry for the incoming file
     virtual MtpObjectHandle         beginSendObject(const MtpString& path,
                                             MtpObjectFormat format,

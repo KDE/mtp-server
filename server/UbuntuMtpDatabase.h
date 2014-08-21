@@ -45,8 +45,11 @@
 #include <boost/filesystem.hpp>
 #include <boost/range/adaptors.hpp>
 #include <boost/range/algorithm.hpp>
+#include <boost/date_time/posix_time/posix_time.hpp>
 
 #include <glog/logging.h>
+
+#define ALL_PROPERTIES 0xffffffff
 
 namespace asio = boost::asio;
 using namespace boost::filesystem;
@@ -64,6 +67,7 @@ private:
         std::string display_name;
         std::string path;
         int watch_fd;
+        std::time_t last_modified;
     };
 
     MtpServer* local_server;
@@ -85,6 +89,7 @@ private:
     boost::thread io_service_thread;
 
     asio::io_service io_svc;
+    asio::io_service::work work;
     asio::posix::stream_descriptor stream_desc;
     asio::streambuf buf;
     int inotify_fd;
@@ -113,7 +118,7 @@ private:
     }
 
     
-    void add_file_entry(path p, MtpObjectHandle parent)
+    void add_file_entry(path p, MtpObjectHandle parent, MtpStorageID storage)
     {
         MtpObjectHandle handle = counter;
         DbEntry entry;
@@ -121,28 +126,30 @@ private:
         counter++;
 
         if (is_directory(p)) {
-            entry.storage_id = MTP_STORAGE_FIXED_RAM;
+            entry.storage_id = storage;
             entry.parent = parent;
             entry.display_name = std::string(p.filename().string());
             entry.path = p.string();
             entry.object_format = MTP_FORMAT_ASSOCIATION;
             entry.object_size = 0;
             entry.watch_fd = setup_dir_inotify(p);
+            entry.last_modified = last_write_time(p);
 
             db.insert( std::pair<MtpObjectHandle, DbEntry>(handle, entry) );
 
             if (local_server)
                 local_server->sendObjectAdded(handle);
 
-            parse_directory (p, handle);
+            parse_directory (p, handle, storage);
         } else {
             try {
-                entry.storage_id = MTP_STORAGE_FIXED_RAM;
+                entry.storage_id = storage;
                 entry.parent = parent;
                 entry.display_name = std::string(p.filename().string());
                 entry.path = p.string();
                 entry.object_format = guess_object_format(p.extension().string());
                 entry.object_size = file_size(p);
+                entry.last_modified = last_write_time(p);
 
                 VLOG(1) << "Adding \"" << p.string() << "\"";
 
@@ -157,20 +164,28 @@ private:
         }
     }
 
-    void parse_directory(path p, MtpObjectHandle parent)
+    void parse_directory(path p, MtpObjectHandle parent, MtpStorageID storage)
     {
 	DbEntry entry;
         std::vector<path> v;
+        boost::system::error_code ec;
+        directory_iterator i (p, ec);
 
-        copy(directory_iterator(p), directory_iterator(), std::back_inserter(v));
+        if (ec == boost::system::errc::permission_denied) {
+            VLOG(2) << "Could not immediately read dir; retrying.";
+            boost::this_thread::sleep(boost::posix_time::millisec(500));
+            i = directory_iterator(p);
+        }
+
+        copy(i, directory_iterator(), std::back_inserter(v));
 
         for (std::vector<path>::const_iterator it(v.begin()), it_end(v.end()); it != it_end; ++it)
         {
-            add_file_entry(*it, parent);
+            add_file_entry(*it, parent, storage);
         }
     }
 
-    void readFiles(const std::string& sourcedir)
+    void readFiles(const std::string& sourcedir, MtpStorageID storage, bool hidden)
     {
         path p (sourcedir);
 	DbEntry entry;
@@ -179,20 +194,34 @@ private:
         try {
             if (exists(p)) {
                 if (is_directory(p)) {
-                    entry.storage_id = MTP_STORAGE_FIXED_RAM;
-                    entry.parent = MTP_PARENT_ROOT;
+                    entry.storage_id = storage;
+                    entry.parent = hidden ? MTP_PARENT_ROOT : 0;
                     entry.display_name = std::string(p.filename().string());
                     entry.path = p.string();
                     entry.object_format = MTP_FORMAT_ASSOCIATION;
                     entry.object_size = 0;
                     entry.watch_fd = setup_dir_inotify(p);
+                    entry.last_modified = last_write_time(p);
 
                     db.insert( std::pair<MtpObjectHandle, DbEntry>(handle, entry) );
 
-                    parse_directory (p, handle);
+                    parse_directory (p, hidden ? 0 : handle, storage);
+                } else
+                    LOG(WARNING) << p << " is not a directory.";
+            } else {
+                if (storage == MTP_STORAGE_FIXED_RAM)
+                    LOG(WARNING) << p << " does not exist.";
+                else {
+                    entry.storage_id = storage;
+                    entry.parent = -1;
+                    entry.display_name = std::string(p.parent_path().filename().string());
+                    entry.path = p.parent_path().string();
+                    entry.object_format = MTP_FORMAT_ASSOCIATION;
+                    entry.object_size = 0;
+                    entry.watch_fd = setup_dir_inotify(p.parent_path());
+                    entry.last_modified = 0;
                 }
-            } else
-                LOG(WARNING) << p << " does not exist\n";
+            }
         }
         catch (const filesystem_error& ex) {
             LOG(ERROR) << ex.what();
@@ -247,10 +276,22 @@ private:
             }
             else if(ievent->len > 0 && ievent->mask & IN_CREATE)
             {
+                int parent_handle = parent;
+
                 VLOG(2) << __PRETTY_FUNCTION__ << ": file created: " << p.string();
 
+                /* Deal with the special case where the SD card might initially
+                 * require an inotify watch, because it's not yet mounted.
+                 * In this case, the SD card inotify watch is entered as a
+                 * normal object, but the parent for the "real" directory
+                 * for the mounted removable media should be the MTP root
+                 * for the storage ID.
+                 */
+                if (db.at(parent).parent == MTP_PARENT_ROOT)
+                    parent_handle = 0;
+
                 /* try to deal with it as if it was a file. */
-                add_file_entry(p, parent);
+                add_file_entry(p, parent_handle, db.at(parent).storage_id);
             }
             else if(ievent->len > 0 && ievent->mask & IN_DELETE)
             {
@@ -271,18 +312,18 @@ private:
     }
 
 public:
-    UbuntuMtpDatabase(const char *dir):
+    UbuntuMtpDatabase():
         counter(1),
         stream_desc(io_svc),
+        work(io_svc),
         buf(1024)
     {
-	std::string basedir (dir);
-
         local_server = nullptr;
 
         inotify_fd = inotify_init();
         if (inotify_fd <= 0)
-            PLOG(FATAL) << "Unable to initialize inotify";
+            PLOG(FATAL) << "Invalid file descriptor to inotify";
+        VLOG(1) << "using inotify fd " << inotify_fd << " for database";
 
         stream_desc.assign(inotify_fd);
 
@@ -290,14 +331,6 @@ public:
 
         notifier_thread = boost::thread(&UbuntuMtpDatabase::read_more_notify,
                                        this);
-
-	readFiles(basedir + "/Documents");
-	readFiles(basedir + "/Music");
-	readFiles(basedir + "/Videos");
-	readFiles(basedir + "/Pictures");
-	readFiles(basedir + "/Downloads");
-
-        LOG(INFO) << "Added " << counter << " entries to the database.";
 
         io_service_thread = boost::thread(boost::bind(&asio::io_service::run, &io_svc));
     }
@@ -307,6 +340,22 @@ public:
         notifier_thread.detach();
         io_service_thread.join();
         close(inotify_fd);
+    }
+
+    virtual void addStoragePath(const MtpString& path,
+                                MtpStorageID storage,
+                                bool hidden)
+    {
+	readFiles(path, storage, hidden);
+    }
+
+    virtual void removeStorage(MtpStorageID storage)
+    {
+        // remove all database entries corresponding to said storage.
+        BOOST_FOREACH(MtpObjectHandle i, db | boost::adaptors::map_keys) {
+            if (db.at(i).storage_id == storage)
+                db.erase(i);
+        }
     }
 
     // called from SendObjectInfo to reserve a database entry for the incoming file
@@ -324,7 +373,8 @@ public:
         if (parent == 0)
             return kInvalidObjectHandle;
 
-        VLOG(1) << __PRETTY_FUNCTION__ << ": " << path << " - " << parent;
+        VLOG(1) << __PRETTY_FUNCTION__ << ": " << path << " - " << parent
+                << " format: " << std::hex << format << std::dec;
 
         entry.storage_id = storage;
         entry.parent = parent;
@@ -332,6 +382,7 @@ public:
         entry.path = path;
         entry.object_format = format;
         entry.object_size = size;
+        entry.last_modified = modified;
 
         db.insert( std::pair<MtpObjectHandle, DbEntry>(handle, entry) );
 
@@ -351,15 +402,22 @@ public:
     {
         VLOG(1) << __PRETTY_FUNCTION__ << ": " << path;
 
-	if (!succeeded) {
-            db.erase(handle);
-        } else {
-            boost::filesystem::path p (path);
+        try
+        {
+	    if (!succeeded) {
+                db.erase(handle);
+            } else {
+                boost::filesystem::path p (path);
 
-            if (format != MTP_FORMAT_ASSOCIATION) {
-                /* Resync file size, just in case this is actually an Edit. */
-                db.at(handle).object_size = file_size(p);
+                if (format != MTP_FORMAT_ASSOCIATION) {
+                    /* Resync file size, just in case this is actually an Edit. */
+                    db.at(handle).object_size = file_size(p);
+                }
             }
+        } catch(...)
+        {
+            LOG(ERROR) << __PRETTY_FUNCTION__
+                       << ": failed to complete object creation:" << path;
         }
     }
 
@@ -370,13 +428,18 @@ public:
     {
         VLOG(1) << __PRETTY_FUNCTION__ << ": " << storageID << ", " << format << ", " << parent;
         MtpObjectHandleList* list = nullptr;
+
+        if (parent == MTP_PARENT_ROOT)
+            parent = 0;
+
         try
         {
             std::vector<MtpObjectHandle> keys;
 
             BOOST_FOREACH(MtpObjectHandle i, db | boost::adaptors::map_keys) {
-                if (db.at(i).parent == parent)
-                    keys.push_back(i);
+                if (db.at(i).storage_id == storageID && db.at(i).parent == parent)
+                    if (format == 0 || db.at(i).object_format == format)
+                        keys.push_back(i);
             }
 
             list = new MtpObjectHandleList(keys);
@@ -394,14 +457,19 @@ public:
         MtpObjectHandle parent)
     {
         VLOG(1) << __PRETTY_FUNCTION__ << ": " << storageID << ", " << format << ", " << parent;
+
+        int result = 0;
+
         try
         {
-            return db.size();
+            MtpObjectHandleList *list = getObjectList(storageID, format, parent);
+            result = list->size();
+            delete list;
         } catch(...)
         {
         }
         
-        return 0;
+        return result;
     }
 
     // callee should delete[] the results from these
@@ -412,6 +480,22 @@ public:
         static const MtpObjectFormatList list = {
             /* Generic files */
             MTP_FORMAT_UNDEFINED,
+            MTP_FORMAT_ASSOCIATION, // folders
+            MTP_FORMAT_TEXT,
+            MTP_FORMAT_HTML,
+
+            /* Supported image formats */
+            MTP_FORMAT_DEFINED, // generic image
+            MTP_FORMAT_EXIF_JPEG,
+            MTP_FORMAT_TIFF_EP,
+            MTP_FORMAT_BMP,
+            MTP_FORMAT_GIF,
+            MTP_FORMAT_JFIF,
+            MTP_FORMAT_PNG,
+            MTP_FORMAT_TIFF,
+            MTP_FORMAT_TIFF_IT,
+            MTP_FORMAT_JP2,
+            MTP_FORMAT_JPX,
 
             /* Supported audio formats */
             MTP_FORMAT_OGG,
@@ -455,11 +539,17 @@ public:
             MTP_PROPERTY_PARENT_OBJECT,
             MTP_PROPERTY_OBJECT_FORMAT,
             MTP_PROPERTY_OBJECT_SIZE,
-            MTP_PROPERTY_WIDTH,
-            MTP_PROPERTY_HEIGHT,
-            MTP_PROPERTY_IMAGE_BIT_DEPTH,
             MTP_PROPERTY_OBJECT_FILE_NAME,
-            MTP_PROPERTY_DISPLAY_NAME            
+            MTP_PROPERTY_DISPLAY_NAME,
+            MTP_PROPERTY_PERSISTENT_UID,
+            MTP_PROPERTY_ASSOCIATION_TYPE,
+            MTP_PROPERTY_ASSOCIATION_DESC,
+            MTP_PROPERTY_PROTECTION_STATUS,
+            MTP_PROPERTY_DATE_CREATED,
+            MTP_PROPERTY_DATE_MODIFIED,
+            MTP_PROPERTY_HIDDEN,
+            MTP_PROPERTY_NON_CONSUMABLE,
+
         };
          
         return new MtpObjectPropertyList{list};
@@ -468,7 +558,10 @@ public:
     virtual MtpDevicePropertyList* getSupportedDeviceProperties()
     {
         VLOG(1) << __PRETTY_FUNCTION__;
-        static const MtpDevicePropertyList list = { MTP_DEVICE_PROPERTY_UNDEFINED };
+        static const MtpDevicePropertyList list = {
+            MTP_DEVICE_PROPERTY_DEVICE_FRIENDLY_NAME,
+            MTP_DEVICE_PROPERTY_SYNCHRONIZATION_PARTNER, 
+        };
         return new MtpDevicePropertyList{list};
     }
 
@@ -477,22 +570,62 @@ public:
         MtpObjectProperty property,
         MtpDataPacket& packet)
     {        
+        char date[20];
+
         VLOG(1) << __PRETTY_FUNCTION__
                 << " handle: " << handle
                 << " property: " << MtpDebug::getObjectPropCodeName(property);
 
-        switch(property)
-        {
-            case MTP_PROPERTY_STORAGE_ID: packet.putUInt32(db.at(handle).storage_id); break;            
-            case MTP_PROPERTY_PARENT_OBJECT: packet.putUInt32(db.at(handle).parent); break;            
-            case MTP_PROPERTY_OBJECT_FORMAT: packet.putUInt32(db.at(handle).object_format); break;
-            case MTP_PROPERTY_OBJECT_SIZE: packet.putUInt32(db.at(handle).object_size); break;
-            case MTP_PROPERTY_DISPLAY_NAME: packet.putString(db.at(handle).display_name.c_str()); break;
-            case MTP_PROPERTY_OBJECT_FILE_NAME: packet.putString(db.at(handle).display_name.c_str()); break;
-            default: return MTP_RESPONSE_GENERAL_ERROR; break;                
-        }
+        if (handle == MTP_PARENT_ROOT || handle == 0)
+            return MTP_RESPONSE_INVALID_OBJECT_HANDLE;
+
+        try {
+            switch(property)
+            {
+                case MTP_PROPERTY_STORAGE_ID: packet.putUInt32(db.at(handle).storage_id); break;            
+                case MTP_PROPERTY_PARENT_OBJECT: packet.putUInt32(db.at(handle).parent); break;            
+                case MTP_PROPERTY_OBJECT_FORMAT: packet.putUInt16(db.at(handle).object_format); break;
+                case MTP_PROPERTY_OBJECT_SIZE: packet.putUInt32(db.at(handle).object_size); break;
+                case MTP_PROPERTY_DISPLAY_NAME: packet.putString(db.at(handle).display_name.c_str()); break;
+                case MTP_PROPERTY_OBJECT_FILE_NAME: packet.putString(db.at(handle).display_name.c_str()); break;
+                case MTP_PROPERTY_PERSISTENT_UID: packet.putUInt128(handle); break;
+                case MTP_PROPERTY_ASSOCIATION_TYPE:
+                    if (db.at(handle).object_format == MTP_FORMAT_ASSOCIATION)
+                        packet.putUInt16(MTP_ASSOCIATION_TYPE_GENERIC_FOLDER);
+                    else
+                        packet.putUInt16(0);
+                    break;
+                case MTP_PROPERTY_ASSOCIATION_DESC: packet.putUInt32(0); break;
+                case MTP_PROPERTY_PROTECTION_STATUS:
+                    packet.putUInt16(0x0000); // no files are read-only for now.
+                    break;
+                case MTP_PROPERTY_DATE_CREATED:
+                    formatDateTime(0, date, sizeof(date));
+                    packet.putString(date);
+                    break;
+                case MTP_PROPERTY_DATE_MODIFIED:
+                    formatDateTime(db.at(handle).last_modified, date, sizeof(date));
+                    packet.putString(date);
+                    break;
+                case MTP_PROPERTY_HIDDEN: packet.putUInt16(0); break;
+                case MTP_PROPERTY_NON_CONSUMABLE: break;
+                    if (db.at(handle).object_format == MTP_FORMAT_ASSOCIATION)
+                        packet.putUInt16(0); // folders are non-consumable
+                    else
+                        packet.putUInt16(1); // files can usually be played.
+                    break;
+                default: return MTP_RESPONSE_GENERAL_ERROR; break;                
+            }
         
-        return MTP_RESPONSE_OK;
+            return MTP_RESPONSE_OK;
+        }
+        catch (...) {
+            LOG(ERROR) << __PRETTY_FUNCTION__
+                       << "Could not retrieve property: "
+                       << MtpDebug::getObjectPropCodeName(property)
+                       << " for handle: " << handle;
+            return MTP_RESPONSE_GENERAL_ERROR;
+        }
     }
 
     virtual MtpResponseCode setObjectPropertyValue(
@@ -510,6 +643,9 @@ public:
         VLOG(1) << __PRETTY_FUNCTION__
                 << " handle: " << handle
                 << " property: " << MtpDebug::getObjectPropCodeName(property);
+
+        if (handle == MTP_PARENT_ROOT || handle == 0)
+            return MTP_RESPONSE_INVALID_OBJECT_HANDLE;
 
         switch(property)
         {
@@ -539,6 +675,16 @@ public:
 		}
 
                 break;
+            case MTP_PROPERTY_PARENT_OBJECT:
+                try {
+                    entry = db.at(handle);
+                    entry.parent = packet.getUInt32();
+                }
+                catch (...) {
+                    LOG(ERROR) << "Could not change parent object for handle "
+                               << handle;
+                    return MTP_RESPONSE_GENERAL_ERROR;
+                }
             default: return MTP_RESPONSE_OPERATION_NOT_SUPPORTED; break;
         }
         
@@ -550,7 +696,16 @@ public:
         MtpDataPacket& packet)
     {
         VLOG(1) << __PRETTY_FUNCTION__;
-        return MTP_RESPONSE_GENERAL_ERROR;
+        switch(property)
+        {
+            case MTP_DEVICE_PROPERTY_SYNCHRONIZATION_PARTNER:
+            case MTP_DEVICE_PROPERTY_DEVICE_FRIENDLY_NAME:
+                packet.putString("");
+                break;
+            default: return MTP_RESPONSE_OPERATION_NOT_SUPPORTED; break;
+        }
+        
+        return MTP_RESPONSE_OK;
     }
 
     virtual MtpResponseCode setDevicePropertyValue(
@@ -558,14 +713,14 @@ public:
         MtpDataPacket& packet)
     {
         VLOG(1) << __PRETTY_FUNCTION__;
-        return MTP_RESPONSE_OPERATION_NOT_SUPPORTED;
+        return MTP_RESPONSE_DEVICE_PROP_NOT_SUPPORTED;
     }
 
     virtual MtpResponseCode resetDeviceProperty(
         MtpDeviceProperty property)
     {
         VLOG(1) << __PRETTY_FUNCTION__;
-        return MTP_RESPONSE_OPERATION_NOT_SUPPORTED;
+        return MTP_RESPONSE_DEVICE_PROP_NOT_SUPPORTED;
     }
 
     virtual MtpResponseCode getObjectPropertyList(
@@ -576,8 +731,184 @@ public:
         int depth,
         MtpDataPacket& packet)
     {
+        std::vector<MtpObjectHandle> handles;
+
         VLOG(2) << __PRETTY_FUNCTION__;
-        return MTP_RESPONSE_OPERATION_NOT_SUPPORTED;
+
+        if (handle == kInvalidObjectHandle)
+            return MTP_RESPONSE_PARAMETER_NOT_SUPPORTED;
+
+        if (property == 0 && groupCode == 0)
+            return MTP_RESPONSE_PARAMETER_NOT_SUPPORTED;
+
+        if (groupCode != 0)
+            return MTP_RESPONSE_SPECIFICATION_BY_GROUP_UNSUPPORTED;
+
+        if (depth > 1)
+            return MTP_RESPONSE_SPECIFICATION_BY_DEPTH_UNSUPPORTED;
+
+        if (depth == 0) {
+            /* For a depth search, a handle of 0 is valid (objects at the root)
+             * but it isn't when querying for the properties of a single object.
+             */
+            if (db.find(handle) == db.end())
+                return MTP_RESPONSE_INVALID_OBJECT_HANDLE;
+
+            handles.push_back(handle);
+        } else {
+            BOOST_FOREACH(MtpObjectHandle i, db | boost::adaptors::map_keys) {
+                if (db.at(i).parent == handle)
+                    handles.push_back(i);
+            }
+        }
+
+        /*
+         * getObjectPropList returns an ObjectPropList dataset table;
+         * built as such:
+         *
+         * 1- Number of elements (quadruples)
+         * a1- Element 1 Object Handle
+         * a2- Element 1 Property Code
+         * a3- Element 1 Data type
+         * a4- Element 1 Value
+         * b... rinse, repeat.
+         */
+
+        if (property == ALL_PROPERTIES)
+             packet.putUInt32(6 * handles.size());
+        else
+             packet.putUInt32(1 * handles.size());
+
+        BOOST_FOREACH(MtpObjectHandle i, handles) {
+            DbEntry entry = db.at(i);
+
+            // Persistent Unique Identifier.
+            if (property == ALL_PROPERTIES || property == MTP_PROPERTY_PERSISTENT_UID) {
+                packet.putUInt32(i);
+                packet.putUInt16(MTP_PROPERTY_PERSISTENT_UID);
+                packet.putUInt16(MTP_TYPE_UINT128);
+                packet.putUInt128(i);
+            }
+
+            // Storage ID
+            if (property == ALL_PROPERTIES || property == MTP_PROPERTY_STORAGE_ID) {
+                packet.putUInt32(i);
+                packet.putUInt16(MTP_PROPERTY_STORAGE_ID);
+                packet.putUInt16(MTP_TYPE_UINT32);
+                packet.putUInt32(entry.storage_id);
+            }
+
+            // Parent
+            if (property == ALL_PROPERTIES || property == MTP_PROPERTY_PARENT_OBJECT) {
+                packet.putUInt32(i);
+                packet.putUInt16(MTP_PROPERTY_PARENT_OBJECT);
+                packet.putUInt16(MTP_TYPE_UINT32);
+                packet.putUInt32(entry.parent);
+            }
+
+            // Object Format
+            if (property == ALL_PROPERTIES || property == MTP_PROPERTY_OBJECT_FORMAT) {
+                packet.putUInt32(i);
+                packet.putUInt16(MTP_PROPERTY_OBJECT_FORMAT);
+                packet.putUInt16(MTP_TYPE_UINT16);
+                packet.putUInt16(entry.object_format);
+            }
+
+            // Object Size
+            if (property == ALL_PROPERTIES || property == MTP_PROPERTY_OBJECT_SIZE) {
+                packet.putUInt32(i);
+                packet.putUInt16(MTP_PROPERTY_OBJECT_SIZE);
+                packet.putUInt16(MTP_TYPE_UINT32);
+                packet.putUInt32(entry.object_size);
+            }
+
+            // Object File Name
+            if (property == ALL_PROPERTIES || property == MTP_PROPERTY_OBJECT_FILE_NAME) {
+                packet.putUInt32(i);
+                packet.putUInt16(MTP_PROPERTY_OBJECT_FILE_NAME);
+                packet.putUInt16(MTP_TYPE_STR);
+                packet.putString(entry.display_name.c_str());
+            }
+
+            // Display Name
+            if (property == ALL_PROPERTIES || property == MTP_PROPERTY_DISPLAY_NAME) {
+                packet.putUInt32(i);
+                packet.putUInt16(MTP_PROPERTY_DISPLAY_NAME);
+                packet.putUInt16(MTP_TYPE_STR);
+                packet.putString(entry.display_name.c_str());
+            }
+
+            // Association Type
+            if (property == ALL_PROPERTIES || property == MTP_PROPERTY_ASSOCIATION_TYPE) {
+                packet.putUInt32(i);
+                packet.putUInt16(MTP_PROPERTY_ASSOCIATION_TYPE);
+                packet.putUInt16(MTP_TYPE_UINT16);
+                if (entry.object_format == MTP_FORMAT_ASSOCIATION)
+                    packet.putUInt16(MTP_ASSOCIATION_TYPE_GENERIC_FOLDER);
+                else
+                    packet.putUInt16(0);
+            }
+
+            // Association Description
+            if (property == ALL_PROPERTIES || property == MTP_PROPERTY_ASSOCIATION_DESC) {
+                packet.putUInt32(i);
+                packet.putUInt16(MTP_PROPERTY_ASSOCIATION_DESC);
+                packet.putUInt16(MTP_TYPE_UINT32);
+                packet.putUInt32(0);
+            }
+
+            // Protection Status
+            if (property == ALL_PROPERTIES || property == MTP_PROPERTY_PROTECTION_STATUS) {
+                packet.putUInt32(i);
+                packet.putUInt16(MTP_PROPERTY_PROTECTION_STATUS);
+                packet.putUInt16(MTP_TYPE_UINT16);
+                packet.putUInt16(0x0000); //FIXME: all files are read-write for now
+                // packet.putUInt16(0x8001);
+            }
+
+            // Date Created
+            if (property == ALL_PROPERTIES || property == MTP_PROPERTY_DATE_CREATED) {
+                char date[20];
+                formatDateTime(0, date, sizeof(date));
+                packet.putUInt32(i);
+                packet.putUInt16(MTP_PROPERTY_DATE_CREATED);
+                packet.putUInt16(MTP_TYPE_STR);
+                packet.putString(date);
+            }
+
+            // Date Modified
+            if (property == ALL_PROPERTIES || property == MTP_PROPERTY_DATE_MODIFIED) {
+                char date[20];
+                formatDateTime(entry.last_modified, date, sizeof(date));
+                packet.putUInt32(i);
+                packet.putUInt16(MTP_PROPERTY_DATE_CREATED);
+                packet.putUInt16(MTP_TYPE_STR);
+                packet.putString(date);
+            }
+
+            // Hidden
+            if (property == ALL_PROPERTIES || property == MTP_PROPERTY_HIDDEN) {
+                packet.putUInt32(i);
+                packet.putUInt16(MTP_PROPERTY_HIDDEN);
+                packet.putUInt16(MTP_TYPE_UINT16);
+                packet.putUInt16(0);
+            }
+
+            // Non Consumable
+            if (property == ALL_PROPERTIES || property == MTP_PROPERTY_NON_CONSUMABLE) {
+                packet.putUInt32(i);
+                packet.putUInt16(MTP_PROPERTY_NON_CONSUMABLE);
+                packet.putUInt16(MTP_TYPE_UINT16);
+                if (entry.object_format == MTP_FORMAT_ASSOCIATION)
+                    packet.putUInt16(0); // folders are non-consumable
+                else
+                    packet.putUInt16(1); // files can usually be played.
+                break;
+            }
+
+        }
+
+        return MTP_RESPONSE_OK;
     }
 
     virtual MtpResponseCode getObjectInfo(
@@ -586,27 +917,37 @@ public:
     {
         VLOG(2) << __PRETTY_FUNCTION__;
 
-        info.mHandle = handle;
-        info.mStorageID = db.at(handle).storage_id;
-        info.mFormat = db.at(handle).object_format;
-        info.mProtectionStatus = 0x0;
-        info.mCompressedSize = db.at(handle).object_size;
-        info.mImagePixWidth = 0;
-        info.mImagePixHeight = 0;
-        info.mImagePixDepth = 0;
-        info.mParent = db.at(handle).parent;
-        info.mAssociationType = 0;
-        info.mAssociationDesc = 0;
-        info.mSequenceNumber = 0;
-        info.mName = ::strdup(db.at(handle).display_name.c_str());
-        info.mDateCreated = 0;
-        info.mDateModified = 0;
-        info.mKeywords = ::strdup("ubuntu,touch");
-        
-        if (VLOG_IS_ON(2))
-            info.print();
+        if (handle == 0 || handle == MTP_PARENT_ROOT)
+            return MTP_RESPONSE_INVALID_OBJECT_HANDLE;
 
-        return MTP_RESPONSE_OK;
+        try {
+            info.mHandle = handle;
+            info.mStorageID = db.at(handle).storage_id;
+            info.mFormat = db.at(handle).object_format;
+            info.mProtectionStatus = 0x0;
+            info.mCompressedSize = db.at(handle).object_size;
+            info.mImagePixWidth = 0;
+            info.mImagePixHeight = 0;
+            info.mImagePixDepth = 0;
+            info.mParent = db.at(handle).parent;
+            info.mAssociationType
+                = info.mFormat == MTP_FORMAT_ASSOCIATION
+                    ? MTP_ASSOCIATION_TYPE_GENERIC_FOLDER : 0;
+            info.mAssociationDesc = 0;
+            info.mSequenceNumber = 0;
+            info.mName = ::strdup(db.at(handle).display_name.c_str());
+            info.mDateCreated = 0;
+            info.mDateModified = db.at(handle).last_modified;
+            info.mKeywords = ::strdup("ubuntu,touch");
+
+            if (VLOG_IS_ON(2))
+                info.print();
+
+            return MTP_RESPONSE_OK;
+        }
+        catch (...) {
+            return MTP_RESPONSE_GENERAL_ERROR;
+        }
     }
 
     virtual void* getThumbnail(MtpObjectHandle handle, size_t& outThumbSize)
@@ -625,15 +966,29 @@ public:
         int64_t& outFileLength,
         MtpObjectFormat& outFormat)
     {
-        DbEntry entry = db.at(handle);
-
         VLOG(1) << __PRETTY_FUNCTION__ << " handle: " << handle;
 
-        outFilePath = std::string(entry.path);
-        outFileLength = entry.object_size;
-        outFormat = entry.object_format;
+        if (handle == 0 || handle == MTP_PARENT_ROOT)
+            return MTP_RESPONSE_INVALID_OBJECT_HANDLE;
 
-        return MTP_RESPONSE_OK;
+        try {
+            DbEntry entry = db.at(handle);
+
+            VLOG(2) << __PRETTY_FUNCTION__
+                    << "handle: " << handle
+                    << "path: " << entry.path
+                    << "length: " << entry.object_size
+                    << "format: " << entry.object_format;
+
+            outFilePath = std::string(entry.path);
+            outFileLength = entry.object_size;
+            outFormat = entry.object_format;
+
+            return MTP_RESPONSE_OK;
+        }
+        catch (...) {
+            return MTP_RESPONSE_GENERAL_ERROR;
+        }
     }
 
     virtual MtpResponseCode deleteFile(MtpObjectHandle handle)
@@ -643,25 +998,33 @@ public:
 
         VLOG(2) << __PRETTY_FUNCTION__ << " handle: " << handle;
 
-        if (db.at(handle).object_format == MTP_FORMAT_ASSOCIATION)
-            inotify_rm_watch(inotify_fd, db.at(handle).watch_fd);
+        if (handle == 0 || handle == MTP_PARENT_ROOT)
+            return MTP_RESPONSE_INVALID_OBJECT_HANDLE;
 
-        new_size = db.erase(handle);
+        try {
+            if (db.at(handle).object_format == MTP_FORMAT_ASSOCIATION)
+                inotify_rm_watch(inotify_fd, db.at(handle).watch_fd);
 
-        if (orig_size > new_size) {
-            /* Recursively remove children object from the DB as well.
-             * we can safely ignore failures here, since the objects
-             * would not be reachable anyway.
-             */
-            BOOST_FOREACH(MtpObjectHandle i, db | boost::adaptors::map_keys) {
-                if (db.at(i).parent == handle)
-                    db.erase(i);
+            new_size = db.erase(handle);
+
+            if (orig_size > new_size) {
+                /* Recursively remove children object from the DB as well.
+                 * we can safely ignore failures here, since the objects
+                 * would not be reachable anyway.
+                 */
+                BOOST_FOREACH(MtpObjectHandle i, db | boost::adaptors::map_keys) {
+                    if (db.at(i).parent == handle)
+                        db.erase(i);
+                }
+
+                return MTP_RESPONSE_OK;
             }
-
-            return MTP_RESPONSE_OK;
+            else
+                return MTP_RESPONSE_GENERAL_ERROR;
         }
-        else
+        catch (...) {
             return MTP_RESPONSE_GENERAL_ERROR;
+        }
     }
 
     virtual MtpResponseCode moveFile(MtpObjectHandle handle, MtpObjectHandle new_parent)
@@ -669,8 +1032,16 @@ public:
         VLOG(1) << __PRETTY_FUNCTION__ << " handle: " << handle
                 << " new parent: " << new_parent;
 
-        // change parent
-        db.at(handle).parent = new_parent;
+        if (handle == 0 || handle == MTP_PARENT_ROOT)
+            return MTP_RESPONSE_INVALID_OBJECT_HANDLE;
+
+        try {
+            // change parent
+            db.at(handle).parent = new_parent;
+        }
+        catch (...) {
+            return MTP_RESPONSE_INVALID_OBJECT_HANDLE;
+        }
 
         return MTP_RESPONSE_OK;
     }
@@ -690,7 +1061,13 @@ public:
     virtual MtpObjectHandleList* getObjectReferences(MtpObjectHandle handle)
     {
         VLOG(1) << __PRETTY_FUNCTION__;
-        return nullptr;
+
+        if (handle == 0 || handle == MTP_PARENT_ROOT)
+            return nullptr;
+
+        return getObjectList(db.at(handle).storage_id,
+                             handle,
+                             db.at(handle).object_format);
     }
 
     virtual MtpResponseCode setObjectReferences(
@@ -698,7 +1075,10 @@ public:
         MtpObjectHandleList* references)
     {
         VLOG(1) << __PRETTY_FUNCTION__;
-        return MTP_RESPONSE_OPERATION_NOT_SUPPORTED;    
+
+        // ignore, we don't keep the references in a list.
+
+        return MTP_RESPONSE_OK;
     }
 
     virtual MtpProperty* getObjectPropertyDesc(
@@ -710,14 +1090,23 @@ public:
         MtpProperty* result = nullptr;
         switch(property)
         {
-            case MTP_PROPERTY_STORAGE_ID: result = new MtpProperty(property, MTP_TYPE_UINT32); break;
-            case MTP_PROPERTY_OBJECT_FORMAT: result = new MtpProperty(property, MTP_TYPE_UINT32); break;
-            case MTP_PROPERTY_OBJECT_SIZE: result = new MtpProperty(property, MTP_TYPE_UINT32); break;
-            case MTP_PROPERTY_WIDTH: result = new MtpProperty(property, MTP_TYPE_UINT32); break;
-            case MTP_PROPERTY_HEIGHT: result = new MtpProperty(property, MTP_TYPE_UINT32); break;
-            case MTP_PROPERTY_IMAGE_BIT_DEPTH: result = new MtpProperty(property, MTP_TYPE_UINT32); break;
+            case MTP_PROPERTY_STORAGE_ID: result = new MtpProperty(property, MTP_TYPE_UINT32, false); break;
+            case MTP_PROPERTY_PARENT_OBJECT: result = new MtpProperty(property, MTP_TYPE_UINT32, true); break;
+            case MTP_PROPERTY_OBJECT_FORMAT: result = new MtpProperty(property, MTP_TYPE_UINT16, false); break;
+            case MTP_PROPERTY_OBJECT_SIZE: result = new MtpProperty(property, MTP_TYPE_UINT32, false); break;
+            case MTP_PROPERTY_WIDTH: result = new MtpProperty(property, MTP_TYPE_UINT32, false); break;
+            case MTP_PROPERTY_HEIGHT: result = new MtpProperty(property, MTP_TYPE_UINT32, false); break;
+            case MTP_PROPERTY_IMAGE_BIT_DEPTH: result = new MtpProperty(property, MTP_TYPE_UINT32, false); break;
             case MTP_PROPERTY_DISPLAY_NAME: result = new MtpProperty(property, MTP_TYPE_STR, true); break;
             case MTP_PROPERTY_OBJECT_FILE_NAME: result = new MtpProperty(property, MTP_TYPE_STR, true); break;
+            case MTP_PROPERTY_PERSISTENT_UID: result = new MtpProperty(property, MTP_TYPE_UINT128, false); break;
+            case MTP_PROPERTY_ASSOCIATION_TYPE: result = new MtpProperty(property, MTP_TYPE_UINT16, false); break;
+            case MTP_PROPERTY_ASSOCIATION_DESC: result = new MtpProperty(property, MTP_TYPE_UINT32, false); break;
+            case MTP_PROPERTY_PROTECTION_STATUS: result = new MtpProperty(property, MTP_TYPE_UINT16, false); break;
+            case MTP_PROPERTY_DATE_CREATED: result = new MtpProperty(property, MTP_TYPE_STR, false); break;
+            case MTP_PROPERTY_DATE_MODIFIED: result = new MtpProperty(property, MTP_TYPE_STR, false); break;
+            case MTP_PROPERTY_HIDDEN: result = new MtpProperty(property, MTP_TYPE_UINT16, false); break;
+            case MTP_PROPERTY_NON_CONSUMABLE: result = new MtpProperty(property, MTP_TYPE_UINT16, false); break;
             default: break;                
         }
         
@@ -727,7 +1116,17 @@ public:
     virtual MtpProperty* getDevicePropertyDesc(MtpDeviceProperty property)
     {
         VLOG(1) << __PRETTY_FUNCTION__ << MtpDebug::getDevicePropCodeName(property);
-        return new MtpProperty(MTP_DEVICE_PROPERTY_UNDEFINED, MTP_TYPE_UNDEFINED);
+
+        MtpProperty* result = nullptr;
+        switch(property)
+        {
+            case MTP_DEVICE_PROPERTY_SYNCHRONIZATION_PARTNER:
+            case MTP_DEVICE_PROPERTY_DEVICE_FRIENDLY_NAME:
+                result = new MtpProperty(property, MTP_TYPE_STR, false); break;
+            default: break;                
+        }
+        
+        return result;
     }
     
     virtual void sessionStarted(MtpServer* server)

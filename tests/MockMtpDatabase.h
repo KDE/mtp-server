@@ -74,6 +74,14 @@ public:
 
     virtual ~MockMtpDatabase() {}
 
+    virtual void addStoragePath(const MtpString& path, MtpStorageID storage, bool hidden)
+    {
+    }
+
+    virtual void removeStorage(MtpStorageID storage)
+    {
+    }
+
     virtual MtpObjectHandle beginSendObject(
         const MtpString& path,
         MtpObjectFormat format,
