@@ -396,8 +396,10 @@ int main(int argc, char** argv)
         LOG(FATAL) << "Error opening /dev/mtp_usb, aborting now...";
     }
  
-    boost::scoped_ptr<MtpDaemon> d(new MtpDaemon(fd));
+    MtpDaemon *d = new MtpDaemon(fd);
 
     d->initStorage();
     d->run();
+
+    delete d;
 }

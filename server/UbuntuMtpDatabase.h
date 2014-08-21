@@ -471,8 +471,9 @@ public:
 
         try
         {
-            boost::scoped_ptr<MtpObjectHandleList> list(getObjectList(storageID, format, parent));
+            MtpObjectHandleList *list = getObjectList(storageID, format, parent);
             result = list->size();
+            delete list;
         } catch(...)
         {
         }
