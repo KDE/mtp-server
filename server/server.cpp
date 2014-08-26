@@ -396,10 +396,19 @@ int main(int argc, char** argv)
         LOG(FATAL) << "Error opening /dev/mtp_usb, aborting now...";
     }
  
-    MtpDaemon *d = new MtpDaemon(fd);
+    try {
+        MtpDaemon *d = new MtpDaemon(fd);
 
-    d->initStorage();
-    d->run();
+        d->initStorage();
+        d->run();
 
-    delete d;
+        delete d;
+    }
+    catch (std::exception& e) {
+        /* If the daemon fails to initialize, ignore the error but
+         * make sure to propagate the message and return with an
+         * error return code.
+         */
+        LOG(ERROR) << "Could not start the MTP server:" << e.what();
+    }
 }
