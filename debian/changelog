@@ -1,9 +1,10 @@
-mtp (0.0.4+14.10.20140825-0ubuntu1) UNRELEASED; urgency=medium
+mtp (0.0.4+14.10.20140827-0ubuntu1) utopic; urgency=medium
 
+  [ Mathieu Trudel-Lapierre ]
   * Fix daemon to not crash when the greeter service is not available.
     (LP: #1360569)
 
- -- Mathieu Trudel-Lapierre <mathieu-tl@ubuntu.com>  Tue, 26 Aug 2014 09:43:37 -0700
+ -- Ubuntu daily release <ps-jenkins@lists.canonical.com>  Wed, 27 Aug 2014 14:51:13 +0000
 
 mtp (0.0.4+14.10.20140821-0ubuntu1) utopic; urgency=medium
 
