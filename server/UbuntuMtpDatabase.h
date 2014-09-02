@@ -370,7 +370,7 @@ public:
 	DbEntry entry;
 	MtpObjectHandle handle = counter;
 
-        if (parent == 0)
+        if (storage == MTP_STORAGE_FIXED_RAM && parent == 0)
             return kInvalidObjectHandle;
 
         VLOG(1) << __PRETTY_FUNCTION__ << ": " << path << " - " << parent
