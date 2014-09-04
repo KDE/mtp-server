@@ -1,3 +1,14 @@
+mtp (0.0.4+14.10.20140904-0ubuntu1) utopic; urgency=low
+
+  [ Mathieu Trudel-Lapierre ]
+  * Fixes for critical bugs: - Avoid crashing in dbus timeouts, just
+    don't ask for the locking state, we can save that. - Allow
+    dragging/copying files on the root of the SD card. - Add support for
+    translating the display name of storage paths; only used for local
+    storage. (LP: #1361181)
+
+ -- Ubuntu daily release <ps-jenkins@lists.canonical.com>  Thu, 04 Sep 2014 20:50:33 +0000
+
 mtp (0.0.4+14.10.20140827-0ubuntu1) utopic; urgency=medium
 
   [ Mathieu Trudel-Lapierre ]
