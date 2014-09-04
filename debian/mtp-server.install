@@ -1,2 +1,3 @@
 usr/bin/mtp-server
+usr/share/locale
 debian/mtp-server.conf /usr/share/upstart/sessions/

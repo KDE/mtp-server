@@ -74,7 +74,7 @@ public:
 
     virtual ~MockMtpDatabase() {}
 
-    virtual void addStoragePath(const MtpString& path, MtpStorageID storage, bool hidden)
+    virtual void addStoragePath(const MtpString& path, const MtpString& displayName, MtpStorageID storage, bool hidden)
     {
     }
 

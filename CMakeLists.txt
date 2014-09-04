@@ -3,6 +3,7 @@ project(mtpserver)
 cmake_minimum_required(VERSION 2.8)
 
 include(FindPkgConfig)
+include(GNUInstallDirs)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 
@@ -100,4 +101,4 @@ enable_testing()
 add_subdirectory(libusbhost)
 add_subdirectory(server)
 add_subdirectory(tests)
-
+add_subdirectory(po)

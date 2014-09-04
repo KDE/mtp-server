@@ -32,6 +32,7 @@ public:
 
     // called to add a path to include in the database.
     virtual void                    addStoragePath(const MtpString& path,
+                                                   const MtpString& displayName,
                                                    MtpStorageID storage,
                                                    bool hidden) = 0;
 

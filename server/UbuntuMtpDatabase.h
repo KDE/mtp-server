@@ -185,18 +185,22 @@ private:
         }
     }
 
-    void readFiles(const std::string& sourcedir, MtpStorageID storage, bool hidden)
+    void readFiles(const std::string& sourcedir, const std::string& display, MtpStorageID storage, bool hidden)
     {
         path p (sourcedir);
 	DbEntry entry;
 	MtpObjectHandle handle = counter++;
+        std::string display_name = std::string(p.filename().string());
+
+        if (!display.empty())
+            display_name = display;
 
         try {
             if (exists(p)) {
                 if (is_directory(p)) {
                     entry.storage_id = storage;
                     entry.parent = hidden ? MTP_PARENT_ROOT : 0;
-                    entry.display_name = std::string(p.filename().string());
+                    entry.display_name = display_name;
                     entry.path = p.string();
                     entry.object_format = MTP_FORMAT_ASSOCIATION;
                     entry.object_size = 0;
@@ -214,7 +218,7 @@ private:
                 else {
                     entry.storage_id = storage;
                     entry.parent = -1;
-                    entry.display_name = std::string(p.parent_path().filename().string());
+                    entry.display_name = display_name;
                     entry.path = p.parent_path().string();
                     entry.object_format = MTP_FORMAT_ASSOCIATION;
                     entry.object_size = 0;
@@ -343,10 +347,11 @@ public:
     }
 
     virtual void addStoragePath(const MtpString& path,
+                                const MtpString& displayName,
                                 MtpStorageID storage,
                                 bool hidden)
     {
-	readFiles(path, storage, hidden);
+	readFiles(path, displayName, storage, hidden);
     }
 
     virtual void removeStorage(MtpStorageID storage)
