@@ -4,6 +4,7 @@ Priority: optional
 Maintainer: Ubuntu Developers <ubuntu-devel-discuss@lists.ubuntu.com>
 XSBC-Original-Maintainer: Thomas Voß <thomas.voss@canonical.com>
 Build-Depends: debhelper (>= 9), 
+               dh-translations,
                cmake, 
                pkg-config,
                libboost-dev,
@@ -21,6 +22,7 @@ Homepage: http://launchpad.net/mtp
 # just go ahead.  ~phablet-team will notice and sync up the code again.
 Vcs-Bzr: https://code.launchpad.net/~phablet-team/mtp/trunk
 Vcs-Browser: https://bazaar.launchpad.net/~phablet-team/mtp/trunk/files
+X-Ubuntu-Use-Langpack: yes
 
 Package: libmtpserver1
 Section: libs

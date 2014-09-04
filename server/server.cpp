@@ -28,6 +28,8 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <pwd.h>
+#include <libintl.h>
+#include <locale.h>
 
 #include <hybris/properties/properties.h>
 #include <glog/logging.h>
@@ -42,6 +44,7 @@
 #include <core/dbus/types/stl/tuple.h>
 #include <core/dbus/types/stl/vector.h>
 #include <core/dbus/types/struct.h>
+
 
 namespace dbus = core::dbus;
 using namespace android;
@@ -119,6 +122,7 @@ private:
 
     // Security
     std::shared_ptr<core::dbus::Property<core::UnityGreeter::Properties::IsActive> > is_active;
+    bool screen_locked = true;
 
     // inotify stuff
     boost::thread notifier_thread;
@@ -152,10 +156,9 @@ private:
 
         storageID++;
 
-        bool screen_locked = is_active->get();
-
         if (!screen_locked) {
             mtp_database->addStoragePath(path,
+                                         std::string(),
                                          removable->getStorageID(),
                                          true);
             server->addStorage(removable);
@@ -295,14 +298,19 @@ public:
             false,
             1024 * 1024 * 1024 * 2  /* 2GB arbitrary max file size */);
         mtp_database->addStoragePath(std::string(userdata->pw_dir) + "/Documents",
+                                     gettext("Documents"),
                                      MTP_STORAGE_FIXED_RAM, false);
         mtp_database->addStoragePath(std::string(userdata->pw_dir) + "/Music",
+                                     gettext("Music"),
                                      MTP_STORAGE_FIXED_RAM, false);
         mtp_database->addStoragePath(std::string(userdata->pw_dir) + "/Videos",
+                                     gettext("Videos"),
                                      MTP_STORAGE_FIXED_RAM, false);
         mtp_database->addStoragePath(std::string(userdata->pw_dir) + "/Pictures",
+                                     gettext("Pictures"),
                                      MTP_STORAGE_FIXED_RAM, false);
         mtp_database->addStoragePath(std::string(userdata->pw_dir) + "/Downloads",
+                                     gettext("Downloads"),
                                      MTP_STORAGE_FIXED_RAM, false);
         home_storage_added = false;
 
@@ -342,6 +350,7 @@ public:
             is_active->changed().connect([this](bool active)
             {
                 if (!active) {
+                    screen_locked = active;
                     VLOG(2) << "device was unlocked, adding storage";
                     if (home_storage && !home_storage_added) {
                         server->addStorage(home_storage);
@@ -353,6 +362,7 @@ public:
                         bool added = std::get<1>(t);
                         if (!added) {
                             mtp_database->addStoragePath(storage->getPath(),
+                                                         std::string(),
                                                          storage->getStorageID(),
                                                          true);
                             server->addStorage(storage);
@@ -361,6 +371,7 @@ public:
                 }
             });
         } else {
+            screen_locked = false;
             VLOG(2) << "device is not locked, adding storage";
             if (home_storage) {
                 server->addStorage(home_storage);
@@ -372,6 +383,7 @@ public:
                 bool added = std::get<1>(t);
                 if (!added) {
                     mtp_database->addStoragePath(storage->getPath(),
+                                                 std::string(),
                                                  storage->getStorageID(),
                                                  true);
                     server->addStorage(storage);
@@ -387,6 +399,10 @@ public:
 int main(int argc, char** argv)
 {
     google::InitGoogleLogging(argv[0]);
+
+    bindtextdomain("mtp-server", "/usr/share/locale");
+    setlocale(LC_ALL, "");
+    textdomain("mtp-server");
 
     LOG(INFO) << "MTP server starting...";
 
