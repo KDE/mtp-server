@@ -119,6 +119,7 @@ private:
 
     // Security
     std::shared_ptr<core::dbus::Property<core::UnityGreeter::Properties::IsActive> > is_active;
+    bool screen_locked = true;
 
     // inotify stuff
     boost::thread notifier_thread;
@@ -151,8 +152,6 @@ private:
             1024 * 1024 * 1024 * 2  /* 2GB arbitrary max file size */);
 
         storageID++;
-
-        bool screen_locked = is_active->get();
 
         if (!screen_locked) {
             mtp_database->addStoragePath(path,
@@ -342,6 +341,7 @@ public:
             is_active->changed().connect([this](bool active)
             {
                 if (!active) {
+                    screen_locked = active;
                     VLOG(2) << "device was unlocked, adding storage";
                     if (home_storage && !home_storage_added) {
                         server->addStorage(home_storage);
@@ -361,6 +361,7 @@ public:
                 }
             });
         } else {
+            screen_locked = false;
             VLOG(2) << "device is not locked, adding storage";
             if (home_storage) {
                 server->addStorage(home_storage);
