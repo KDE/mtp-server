@@ -1,3 +1,11 @@
+mtp (0.0.4+14.10.20140909-0ubuntu1) utopic; urgency=low
+
+  [ Mathieu Trudel-Lapierre ]
+  * Fix duplicated entries when copying files/directories on Windows.
+    (LP: #1351042)
+
+ -- Ubuntu daily release <ps-jenkins@lists.canonical.com>  Tue, 09 Sep 2014 03:47:19 +0000
+
 mtp (0.0.4+14.10.20140904-0ubuntu1) utopic; urgency=low
 
   [ Mathieu Trudel-Lapierre ]
