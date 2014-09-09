@@ -281,21 +281,33 @@ private:
             else if(ievent->len > 0 && ievent->mask & IN_CREATE)
             {
                 int parent_handle = parent;
+                bool exists = false;
 
                 VLOG(2) << __PRETTY_FUNCTION__ << ": file created: " << p.string();
+                BOOST_FOREACH(MtpObjectHandle i, db | boost::adaptors::map_keys) {
+                    if (db.at(i).path == p.string()) {
+			/* ignore files we already have (ie. from a beginSendObject)
+                         * See bug #1351042
+                         */
+                        exists = true;
+                        break;
+                    }
+                }
 
-                /* Deal with the special case where the SD card might initially
-                 * require an inotify watch, because it's not yet mounted.
-                 * In this case, the SD card inotify watch is entered as a
-                 * normal object, but the parent for the "real" directory
-                 * for the mounted removable media should be the MTP root
-                 * for the storage ID.
-                 */
-                if (db.at(parent).parent == MTP_PARENT_ROOT)
-                    parent_handle = 0;
+                if (!exists) {
+                    /* Deal with the special case where the SD card might initially
+                     * require an inotify watch, because it's not yet mounted.
+                     * In this case, the SD card inotify watch is entered as a
+                     * normal object, but the parent for the "real" directory
+                     * for the mounted removable media should be the MTP root
+                     * for the storage ID.
+                     */
+                    if (db.at(parent).parent == MTP_PARENT_ROOT)
+                        parent_handle = 0;
 
-                /* try to deal with it as if it was a file. */
-                add_file_entry(p, parent_handle, db.at(parent).storage_id);
+                    /* try to deal with it as if it was a file. */
+                    add_file_entry(p, parent_handle, db.at(parent).storage_id);
+                }
             }
             else if(ievent->len > 0 && ievent->mask & IN_DELETE)
             {
