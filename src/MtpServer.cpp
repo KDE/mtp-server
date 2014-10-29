@@ -158,12 +158,21 @@ bool MtpServer::hasStorage(MtpStorageID id) {
     return (getStorage(id) != NULL);
 }
 
+void MtpServer::stop() {
+    mRunning = false;
+}
+
 void MtpServer::run() {
     int fd = mFD;
 
     VLOG(1) << "MtpServer::run fd: " << fd;
 
+    mRunning = true;
+
     while (1) {
+        if (!mRunning)
+            break;
+
         int ret = mRequest.read(fd);
         if (ret < 0) {
             PLOG(ERROR) << "request read returned " << ret;
