@@ -167,6 +167,7 @@ void MtpServer::run() {
 
     VLOG(1) << "MtpServer::run fd: " << fd;
 
+    mRunning = true;
     while (mRunning) {
         int ret = mRequest.read(fd);
         if (ret < 0) {
