@@ -39,6 +39,9 @@ private:
 
     MtpDatabase*        mDatabase;
 
+    // keep state whether the server should be running
+    bool                mRunning;
+
     // appear as a PTP device
     bool                mPtp;
 
@@ -101,6 +104,7 @@ public:
     void                removeStorage(MtpStorage* storage);
 
     void                run();
+    void                stop();
 
     void                sendObjectAdded(MtpObjectHandle handle);
     void                sendObjectRemoved(MtpObjectHandle handle);

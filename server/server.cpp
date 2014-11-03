@@ -113,6 +113,8 @@ class MtpDaemon
 
 private:
     struct passwd *userdata;
+    dbus::Bus::Ptr bus;
+    boost::thread dbus_thread;
 
     // Mtp stuff
     MtpServer* server;
@@ -238,6 +240,17 @@ private:
         read_more_notify();
     }
 
+    void drive_bus()
+    {
+        try {
+            bus->run();
+        }
+        catch (...) {
+            PLOG(ERROR) << "There was an unexpected error in DBus; terminating.";
+            server->stop();
+        }
+    }
+
 public:
 
     MtpDaemon(int fd):
@@ -272,13 +285,11 @@ public:
                 FileSystemConfig::directory_perm);
 
         // security / screen locking
-        auto bus = core::the_session_bus();
+        bus = core::the_session_bus();
         bus->install_executor(core::dbus::asio::make_executor(bus));
-        std::thread t {std::bind(&dbus::Bus::run, bus)};
+        dbus_thread = boost::thread(&MtpDaemon::drive_bus, this);
         auto greeter_service = dbus::Service::use_service(bus, "com.canonical.UnityGreeter");
         dbus::Object::Ptr greeter = greeter_service->object_for_path(dbus::types::ObjectPath("/"));
-
-        t.detach();
 
         is_active = greeter->get_property<core::UnityGreeter::Properties::IsActive>();
     }
@@ -339,6 +350,7 @@ public:
         // Cleanup
         inotify_rm_watch(inotify_fd, watch_fd);
         io_svc.stop();
+        dbus_thread.detach();
         notifier_thread.detach();
         io_service_thread.join();
         close(inotify_fd);
