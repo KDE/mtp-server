@@ -1,3 +1,11 @@
+mtp (0.0.4+15.04.20141104-0ubuntu2) UNRELEASED; urgency=medium
+
+  * Remove the limit on respawns on mtp-server to workaround the fact that on
+    unplug/plug, the USB device gets quickly reset a few times and that makes
+    mtp fail reads and exit, which triggers a restart of the job. (LP: #1392405)
+
+ -- Mathieu Trudel-Lapierre <mathieu-tl@ubuntu.com>  Thu, 13 Nov 2014 14:21:52 -0500
+
 mtp (0.0.4+15.04.20141104-0ubuntu1) vivid; urgency=low
 
   [ Mathieu Trudel-Lapierre ]
