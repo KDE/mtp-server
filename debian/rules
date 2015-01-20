@@ -12,3 +12,6 @@ override_dh_installinit:
 	dh_installinit -pmtp-server --name=mtp-state --no-start -r -n
 	dh_installinit
 
+override_dh_install:
+	cp debian/mtp-server.mtp-state.upstart debian/mtp-state.conf
+	dh_install

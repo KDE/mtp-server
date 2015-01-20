@@ -1,3 +1,9 @@
+mtp (0.0.4+15.04.20141113-0ubuntu2) vivid; urgency=medium
+
+  * Prepare mtp-state & mtp-server jobs to run from session init alone.
+
+ -- Dimitri John Ledkov <dimitri.j.ledkov@linux.intel.com>  Sat, 17 Jan 2015 00:05:58 +0000
+
 mtp (0.0.4+15.04.20141113-0ubuntu1) vivid; urgency=medium
 
   [ Mathieu Trudel-Lapierre ]
