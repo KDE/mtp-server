@@ -1,3 +1,12 @@
+mtp (0.0.4+15.04.20150120-0ubuntu1) vivid; urgency=low
+
+  [ Mathieu Trudel-Lapierre ]
+  * Adjust start and stop conditions to properly handle USB connection
+    *and* disconnection, and to do the right thing at boot-time if USB
+    is connected already.
+
+ -- Ubuntu daily release <ps-jenkins@lists.canonical.com>  Tue, 20 Jan 2015 16:19:48 +0000
+
 mtp (0.0.4+15.04.20141113-0ubuntu2) vivid; urgency=medium
 
   * Prepare mtp-state & mtp-server jobs to run from session init alone.
