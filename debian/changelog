@@ -1,3 +1,12 @@
+mtp (0.0.4+15.04.20150126-0ubuntu1) vivid; urgency=low
+
+  [ Mathieu Trudel-Lapierre ]
+  * Fix crash when recursively deleting directories; due to the
+    concurrency between inotify notifications from filesystem changes
+    and the delete method already removing items from the database.
+
+ -- Ubuntu daily release <ps-jenkins@lists.canonical.com>  Mon, 26 Jan 2015 20:22:58 +0000
+
 mtp (0.0.4+15.04.20150120-0ubuntu1) vivid; urgency=low
 
   [ Mathieu Trudel-Lapierre ]
