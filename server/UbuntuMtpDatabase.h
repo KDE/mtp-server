@@ -252,6 +252,7 @@ private:
             const char* cdata = processed + asio::buffer_cast<const char*>(buf.data());
             const inotify_event* ievent = reinterpret_cast<const inotify_event*>(cdata);
             MtpObjectHandle parent;
+            path p;
      
             processed += sizeof(inotify_event) + ievent->len;
      
@@ -262,7 +263,12 @@ private:
                 }
             }
 
-            path p(db.at(parent).path + "/" + ievent->name);
+            try {
+                p = path(db.at(parent).path + "/" + ievent->name);
+            } catch (...) {
+                PLOG(WARNING) << "Could not find parent for event " << ievent->name;
+                continue;
+            }
 
             if(ievent->len > 0 && ievent->mask & IN_MODIFY)
             {
