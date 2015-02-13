@@ -422,6 +422,7 @@ int main(int argc, char** argv)
     if (fd < 0)
     {
         LOG(ERROR) << "Error opening /dev/mtp_usb, aborting now...";
+        return 1;
     }
  
     try {
