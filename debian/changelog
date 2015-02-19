@@ -1,3 +1,12 @@
+mtp (0.0.4+15.04.20150219-0ubuntu1) vivid; urgency=medium
+
+  [ Mathieu Trudel-Lapierre ]
+  * Fix startup issues on desktop: guard against android_usb not being
+    available and don't fail with an abort when /dev/mtp_usb isn't
+    there; just error and return. (LP: #1421664)
+
+ -- CI Train Bot <ci-train-bot@canonical.com>  Thu, 19 Feb 2015 19:56:15 +0000
+
 mtp (0.0.4+15.04.20150126-0ubuntu1) vivid; urgency=low
 
   [ Mathieu Trudel-Lapierre ]
