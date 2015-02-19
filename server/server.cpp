@@ -421,7 +421,8 @@ int main(int argc, char** argv)
     int fd = open("/dev/mtp_usb", O_RDWR);
     if (fd < 0)
     {
-        LOG(FATAL) << "Error opening /dev/mtp_usb, aborting now...";
+        LOG(ERROR) << "Error opening /dev/mtp_usb, aborting now...";
+        return 1;
     }
  
     try {
