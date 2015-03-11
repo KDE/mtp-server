@@ -1,3 +1,10 @@
+mtp (0.0.4+15.04.20150219-0ubuntu2) UNRELEASED; urgency=medium
+
+  * Properly fixing the startup script, as the previous change broke
+    mtp on ubuntu touch completely
+
+ -- Ricardo Salveti de Araujo <ricardo.salveti@canonical.com>  Wed, 11 Mar 2015 16:26:19 -0300
+
 mtp (0.0.4+15.04.20150219-0ubuntu1) vivid; urgency=medium
 
   [ Mathieu Trudel-Lapierre ]
