@@ -1,3 +1,9 @@
+mtp (0.0.4+15.04.20150219-0ubuntu2kubuntu1) vivid; urgency=medium
+
+  * New fork of mtp for plasma phone git@github.com:plasma-mobile/mtp-server.git
+
+ -- Jonathan Riddell <jriddell@ubuntu.com>  Mon, 15 Jun 2015 04:08:42 +0200
+
 mtp (0.0.4+15.04.20150219-0ubuntu2) vivid; urgency=medium
 
   * Properly fixing the startup script, as the previous change broke
