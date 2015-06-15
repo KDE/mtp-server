@@ -6,7 +6,7 @@
 export DPKG_GENSYMBOLS_CHECK_LEVEL = 4
 
 %:
-	dh $@ --with translations -- --fail-missing
+	dh $@ --with translations
 
 override_dh_installinit:
 	dh_installinit -pmtp-server --name=mtp-state --no-start -r -n
