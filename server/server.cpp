@@ -308,20 +308,9 @@ public:
             1024 * 1024 * 100,  /* 100 MB reserved space, to avoid filling the disk */
             false,
             1024 * 1024 * 1024 * 2  /* 2GB arbitrary max file size */);
-        mtp_database->addStoragePath(std::string(userdata->pw_dir) + "/Documents",
-                                     gettext("Documents"),
-                                     MTP_STORAGE_FIXED_RAM, false);
-        mtp_database->addStoragePath(std::string(userdata->pw_dir) + "/Music",
-                                     gettext("Music"),
-                                     MTP_STORAGE_FIXED_RAM, false);
-        mtp_database->addStoragePath(std::string(userdata->pw_dir) + "/Videos",
-                                     gettext("Videos"),
-                                     MTP_STORAGE_FIXED_RAM, false);
-        mtp_database->addStoragePath(std::string(userdata->pw_dir) + "/Pictures",
-                                     gettext("Pictures"),
-                                     MTP_STORAGE_FIXED_RAM, false);
-        mtp_database->addStoragePath(std::string(userdata->pw_dir) + "/Downloads",
-                                     gettext("Downloads"),
+
+        mtp_database->addStoragePath(std::string(userdata->pw_dir),
+                                     std::string("Home"),
                                      MTP_STORAGE_FIXED_RAM, false);
         home_storage_added = false;
 
