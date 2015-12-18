@@ -348,8 +348,7 @@ public:
     void run()
     {
         // FIXME: Explicit false to run this on non-greeter environments
-        //if (false && is_active->get()) {
-        if (false) {
+        if (false && is_active->get()) {
             is_active->changed().connect([this](bool active)
             {
                 if (!active) {
