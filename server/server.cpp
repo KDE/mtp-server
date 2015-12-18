@@ -291,7 +291,7 @@ public:
         auto greeter_service = dbus::Service::use_service(bus, "com.canonical.UnityGreeter");
         dbus::Object::Ptr greeter = greeter_service->object_for_path(dbus::types::ObjectPath("/"));
 
-        is_active = greeter->get_property<core::UnityGreeter::Properties::IsActive>();
+        //is_active = greeter->get_property<core::UnityGreeter::Properties::IsActive>();
     }
 
     void initStorage()
