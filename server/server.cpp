@@ -34,28 +34,10 @@
 #include <hybris/properties/properties.h>
 #include <glog/logging.h>
 
-#include <core/dbus/bus.h>
-#include <core/dbus/object.h>
-#include <core/dbus/property.h>
-#include <core/dbus/service.h>
-#include <core/dbus/signal.h>
-    
-#include <core/dbus/asio/executor.h>
-#include <core/dbus/types/stl/tuple.h>
-#include <core/dbus/types/stl/vector.h>
-#include <core/dbus/types/struct.h>
-
-
-namespace dbus = core::dbus;
 using namespace android;
 
 namespace core
 {
-dbus::Bus::Ptr the_session_bus()
-{
-    static dbus::Bus::Ptr session_bus = std::make_shared<dbus::Bus>(dbus::WellKnownBus::session);
-    return session_bus;
-}
 
 struct UnityGreeter
 {
@@ -76,28 +58,6 @@ struct UnityGreeter
 };
 }
 
-namespace core  
-{               
-namespace dbus      
-{               
-namespace traits
-{               
-template<>      
-struct Service<core::UnityGreeter> 
-{        
-    inline static const std::string& interface_name()
-    {
-        static const std::string s
-        {
-            "com.canonical.UnityGreeter"
-        };      
-        return s;
-    }               
-};
-}
-}
-}
-
 namespace
 {
 struct FileSystemConfig
@@ -113,8 +73,6 @@ class MtpDaemon
 
 private:
     struct passwd *userdata;
-    dbus::Bus::Ptr bus;
-    boost::thread dbus_thread;
 
     // Mtp stuff
     MtpServer* server;
@@ -123,8 +81,7 @@ private:
     MtpDatabase* mtp_database;
 
     // Security
-    std::shared_ptr<core::dbus::Property<core::UnityGreeter::Properties::IsActive> > is_active;
-    bool screen_locked = true;
+    bool screen_locked = false;
 
     // inotify stuff
     boost::thread notifier_thread;
@@ -240,17 +197,6 @@ private:
         read_more_notify();
     }
 
-    void drive_bus()
-    {
-        try {
-            bus->run();
-        }
-        catch (...) {
-            PLOG(ERROR) << "There was an unexpected error in DBus; terminating.";
-            server->stop();
-        }
-    }
-
 public:
 
     MtpDaemon(int fd):
@@ -283,15 +229,6 @@ public:
                 userdata->pw_gid, 
                 FileSystemConfig::file_perm, 
                 FileSystemConfig::directory_perm);
-
-        // security / screen locking
-        bus = core::the_session_bus();
-        bus->install_executor(core::dbus::asio::make_executor(bus));
-        dbus_thread = boost::thread(&MtpDaemon::drive_bus, this);
-        auto greeter_service = dbus::Service::use_service(bus, "com.canonical.UnityGreeter");
-        dbus::Object::Ptr greeter = greeter_service->object_for_path(dbus::types::ObjectPath("/"));
-
-        //is_active = greeter->get_property<core::UnityGreeter::Properties::IsActive>();
     }
 
     void initStorage()
@@ -339,7 +276,6 @@ public:
         // Cleanup
         inotify_rm_watch(inotify_fd, watch_fd);
         io_svc.stop();
-        dbus_thread.detach();
         notifier_thread.detach();
         io_service_thread.join();
         close(inotify_fd);
@@ -347,49 +283,22 @@ public:
 
     void run()
     {
-        // FIXME: Explicit false to run this on non-greeter environments
-        if (false && is_active->get()) {
-            is_active->changed().connect([this](bool active)
-            {
-                if (!active) {
-                    screen_locked = active;
-                    VLOG(2) << "device was unlocked, adding storage";
-                    if (home_storage && !home_storage_added) {
-                        server->addStorage(home_storage);
-                        home_storage_added = true;
-                    }
-                    BOOST_FOREACH(std::string name, removables | boost::adaptors::map_keys) {
-                        auto t = removables.at(name);
-                        MtpStorage *storage = std::get<0>(t);
-                        bool added = std::get<1>(t);
-                        if (!added) {
-                            mtp_database->addStoragePath(storage->getPath(),
-                                                         std::string(),
-                                                         storage->getStorageID(),
-                                                         true);
-                            server->addStorage(storage);
-                        }
-                    }
-                }
-            });
-        } else {
-            screen_locked = false;
-            VLOG(2) << "device is not locked, adding storage";
-            if (home_storage) {
-                server->addStorage(home_storage);
-                home_storage_added = true;
-            }
-            BOOST_FOREACH(std::string name, removables | boost::adaptors::map_keys) {
-                auto t = removables.at(name);
-                MtpStorage *storage = std::get<0>(t);
-                bool added = std::get<1>(t);
-                if (!added) {
-                    mtp_database->addStoragePath(storage->getPath(),
-                                                 std::string(),
-                                                 storage->getStorageID(),
-                                                 true);
-                    server->addStorage(storage);
-                }
+        screen_locked = false;
+        VLOG(2) << "device is not locked, adding storage";
+        if (home_storage) {
+            server->addStorage(home_storage);
+            home_storage_added = true;
+        }
+        BOOST_FOREACH(std::string name, removables | boost::adaptors::map_keys) {
+            auto t = removables.at(name);
+            MtpStorage *storage = std::get<0>(t);
+            bool added = std::get<1>(t);
+            if (!added) {
+                mtp_database->addStoragePath(storage->getPath(),
+                                             std::string(),
+                                             storage->getStorageID(),
+                                             true);
+                server->addStorage(storage);
             }
         }
 
