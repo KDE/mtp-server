@@ -40,8 +40,6 @@
 
 #include <linux/usb/f_mtp.h>
 
-#include <hybris/properties/properties.h>
-
 #include <glog/logging.h>
 
 namespace android {
@@ -455,7 +453,6 @@ bool MtpServer::handleRequest() {
 MtpResponseCode MtpServer::doGetDeviceInfo() {
     VLOG(1) <<  __PRETTY_FUNCTION__;
     MtpStringBuffer   string;
-    char prop_value[PROP_VALUE_MAX];
 
     MtpObjectFormatList* playbackFormats = mDatabase->getSupportedPlaybackFormats();
     MtpObjectFormatList* captureFormats = mDatabase->getSupportedCaptureFormats();
@@ -487,18 +484,15 @@ MtpResponseCode MtpServer::doGetDeviceInfo() {
     mData.putAUInt16(captureFormats); // Capture Formats
     mData.putAUInt16(playbackFormats);  // Playback Formats
 
-    property_get("ro.product.manufacturer", prop_value, "unknown manufacturer");
-    string.set(prop_value);
+    string.set("Unknown manufacturer");
     mData.putString(string);   // Manufacturer
 
-    property_get("ro.product.model", prop_value, "MTP Device");
-    string.set(prop_value);
+    string.set("MTP Device");
     mData.putString(string);   // Model
     string.set("1.0");
     mData.putString(string);   // Device Version
 
-    property_get("ro.serialno", prop_value, "????????");
-    string.set(prop_value);
+    string.set("????????");
     mData.putString(string);   // Serial Number
 
     delete playbackFormats;

@@ -31,7 +31,6 @@
 #include <libintl.h>
 #include <locale.h>
 
-#include <hybris/properties/properties.h>
 #include <glog/logging.h>
 
 #include <core/dbus/bus.h>
@@ -296,10 +295,7 @@ public:
 
     void initStorage()
     {
-        char product_name[PROP_VALUE_MAX];
-
-        // Local storage
-        property_get ("ro.product.model", product_name, "Ubuntu Touch device");
+        constexpr auto product_name = "Linux Smartphone";
 
         home_storage = new MtpStorage(
             MTP_STORAGE_FIXED_RAM, 
