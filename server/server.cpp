@@ -154,7 +154,7 @@ private:
             name,
             1024 * 1024 * 100,  /* 100 MB reserved space, to avoid filling the disk */
             true,
-            1024 * 1024 * 1024 * 2  /* 2GB arbitrary max file size */);
+            (long)1024 * 1024 * 1024 * 2  /* 2GB arbitrary max file size */);
 
         storageID++;
 
@@ -307,7 +307,7 @@ public:
 	    product_name,
             1024 * 1024 * 100,  /* 100 MB reserved space, to avoid filling the disk */
             false,
-            1024 * 1024 * 1024 * 2  /* 2GB arbitrary max file size */);
+            (long)1024 * 1024 * 1024 * 2  /* 2GB arbitrary max file size */);
 
         mtp_database->addStoragePath(std::string(userdata->pw_dir),
                                      std::string("Home"),
